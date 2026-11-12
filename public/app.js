@@ -99,6 +99,36 @@ function renderOwnership(c) {
     h('p', { class: 'fine' }, 'Search for: ', h('b', {}, name), '. The company may be registered in a different state than its FMCSA address. Many LLCs list only a registered agent, and a name match is a lead, not proof.'));
 }
 
+function ratingChip(r) {
+  const bad = /^unsat/i.test(r), na = /^not appl/i.test(r) || !r;
+  return h('span', { class: 'chip ' + (bad ? 'I' : '') , style: na ? 'opacity:.6' : '' }, r || '-');
+}
+
+function renderChp(chp, page) {
+  const i = chp.inspections;
+  const link = h('a', { href: page, target: '_blank', rel: 'noopener noreferrer' }, 'CHP Carrier Inspection Results \u2197');
+  const ids = [
+    h('b', {}, 'CA ' + chp.ca), chp.status ? ' \xB7 ' + chp.status : '',
+    chp.calT ? ' \xB7 Cal-T ' + chp.calT : '', chp.psc ? ' \xB7 PSC ' + chp.psc : '',
+  ];
+  const body = !i
+    ? h('p', { class: 'fine' }, 'Inspection results did not load. Try again, or open the ', link, '.')
+    : [
+      h('p', { class: 'fine', style: 'margin:6px 0 2px' },
+        i.terminalCount ? `${i.terminalCount} California terminal${i.terminalCount === 1 ? '' : 's'} \xB7 ${i.inspectionCount} inspection${i.inspectionCount === 1 ? '' : 's'}` +
+          (i.lastInspection ? `, latest ${i.lastInspection}` : '') + (i.terminalUnsatisfactory ? ` \xB7 ${i.terminalUnsatisfactory} with an unsatisfactory terminal rating` : '')
+          : 'No terminal inspections on file.'),
+      i.csat.length ? h('p', { class: 'fine', style: 'margin:2px 0' }, 'Drug and alcohol testing (CSAT) audits: ',
+        i.csat.slice(0, 3).map((r, k) => [k ? ', ' : '', r.date + ' ', ratingChip(r.rating)])) : null,
+      i.terminals.map((t) => h('details', { style: 'margin-top:6px' },
+        h('summary', {}, `Terminal ${t.id || ''} \xB7 ${t.location || ''}${t.status ? ' \xB7 ' + t.status : ''} (${t.inspectionCount})`),
+        h('ul', { class: 'ev' }, t.inspections.map((r) => h('li', {}, r.date + ' \xB7 ' + (r.category || 'Inspection') + ' \xB7 terminal ', ratingChip(r.terminal),
+          ' maintenance ', ratingChip(r.maintenance), ' equipment ', ratingChip(r.equipment), ' driver ', ratingChip(r.driver)))))),
+      h('p', { class: 'fine' }, 'Source: ', link, '. Ratings come from CHP terminal inspections and are a lead to review, not a finding.'),
+    ];
+  return [h('p', { style: 'margin:4px 0 0' }, ids), body];
+}
+
 function renderCa(ca) {
   if (!ca) return null;
   const link = h('a', { href: ca.page, target: '_blank', rel: 'noopener noreferrer' }, 'DMV Active Motor Carriers list \u2197');
@@ -109,12 +139,14 @@ function renderCa(ca) {
   ]);
   return h('div', { class: 'card' },
     h('h3', {}, 'California Motor Carrier Permit'),
+    ca.chp ? renderChp(ca.chp, ca.chpPage) : null,
     ca.available === false
       ? h('p', { class: 'fine', style: 'margin-top:4px' }, 'The DMV permit list did not respond, so this was not checked. Try again, or search the ', link, '.')
       : ca.found
         ? [h('ul', { class: 'ev' }, ca.permits.map(permit)),
-           h('p', { class: 'fine' }, 'Matched on the exact legal name in the DMV list of active permits. A same-name match is not proof it is the same company; compare the phone and address.')]
-        : h('p', { class: 'fine', style: 'margin-top:4px' }, 'No active permit found under this exact legal name. That does not mean there is none: the DMV may list the company under a slightly different name, and out-of-state or non-property carriers may not need one. Search the ', link, ' to check.'));
+           h('p', { class: 'fine' }, ca.chp ? 'Permit details from the DMV list of active permits, matched on the CA number.' : 'Matched on the exact legal name in the DMV list of active permits. A same-name match is not proof it is the same company; compare the phone and address.')]
+        : ca.chp ? h('p', { class: 'fine', style: 'margin-top:4px' }, 'Not found in the DMV active permit list, so the permit may be inactive or expired. Check the ', link, '.')
+        : h('p', { class: 'fine', style: 'margin-top:4px' }, (ca.chpDown ? 'The CHP inspection site did not respond. ' : 'Not found in the CHP inspection records. ') + 'No active permit found under this exact legal name. That does not mean there is none: the DMV may list the company under a slightly different name, and out-of-state or non-property carriers may not need one. Search the ', link, ' to check.'));
 }
 
 function renderCarrier(d) {

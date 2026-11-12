@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normPhone, splitStreet, matchAddresses, normalizeCarrier, buildSignals, parseDate, isMailbox, soqlStr } from '../src/lib.js';
+import { parseChpSearch, parseChpTerminal, summarizeChp, normPhone, splitStreet, matchAddresses, normalizeCarrier, buildSignals, parseDate, isMailbox, soqlStr } from '../src/lib.js';
 import { parseQuery } from '../src/index.js';
 import { parseCsv, parseDmvPermits, normName, padCa } from '../src/lib.js';
 
@@ -148,4 +148,35 @@ test('DMV permit CSV parsing', () => {
   assert.throws(() => parseDmvPermits('<html>blocked</html>'));
   assert.deepEqual(parseDmvPermits(''), []);
   assert.equal(normName('A & S Metal, Recycling Inc.'), normName('A AND S METAL RECYCLING INC'));
+});
+
+const CHP_SEARCH = `<table id="tableSearchCarrier"><thead><tr><th>x</th></tr></thead><tbody>
+<tr><td title="Carrier Inspection Details"><a data-canbr="25"></a></td><td><h3> 25 </h3></td><td> 365109 </td><td>Active</td>
+<td> A &amp; S METAL RECYCLING, INC. <br /> DBA: A&amp;S METAL RECYCING <br /> </td><td>LOS ANGELES</td><td>CA, US</td>
+<td><label>Cal-T #s: n/a</label> <label>Docket #s: MC212206</label> <label>PSG #s: n/a</label></td></tr></tbody></table>`;
+const CHP_TERM = `<h2>Viewing Inspection Results for A &amp; S, CA #25 (Active)</h2>
+<table id="tableCSAT"><thead><tr><th>Rating Date</th><th>Rating</th></tr></thead><tbody>
+<tr><td>03/13/2025</td><td>Satisfactory</td></tr><tr><td>09/21/2020</td><td>Unsatisfactory</td></tr></tbody></table>
+<table id="tableTerminal"><tbody><tr><td colspan="7"><h3>Inspection Results for Terminal #38353, A &amp; S</h3><h3>Current Status: Active</h3><h3>Location: LOS ANGELES, CA</h3>
+<table id="tableInspection"><thead><tr><th>Date</th></tr></thead><tbody>
+<tr><td>7/15/2025</td><td><label>Satisfactory</label></td><td><label>Not Applicable</label></td><td><label>Satisfactory</label></td><td><label>Not Applicable</label></td><td><label>Satisfactory</label></td><td><label>D. Hazardous Waste Transporter</label></td></tr>
+<tr><td>3/20/2025</td><td><label>Unsatisfactory</label></td><td><label>Satisfactory</label></td><td><label>Unsatisfactory</label></td><td><label>Satisfactory</label></td><td><label>Unsatisfactory</label></td><td><label>D. Hazardous Waste Transporter</label></td></tr>
+</tbody></table></td></tr></tbody></table>`;
+
+test('parseChpSearch reads CA, DOT, names and other numbers', () => {
+  const [r] = parseChpSearch(CHP_SEARCH);
+  assert.equal(r.ca, '25'); assert.equal(r.dot, '365109'); assert.equal(r.status, 'Active');
+  assert.equal(r.name, 'A & S METAL RECYCLING, INC.'); assert.equal(r.dba, 'A&S METAL RECYCING');
+  assert.equal(r.city, 'LOS ANGELES'); assert.equal(r.calT, null); assert.equal(r.docket, 'MC212206'); assert.equal(r.psc, null);
+  assert.deepEqual(parseChpSearch('<html>no table</html>'), []);
+});
+
+test('parseChpTerminal and summarizeChp', () => {
+  const p = parseChpTerminal(CHP_TERM);
+  assert.equal(p.csat.length, 2); assert.equal(p.terminals.length, 1);
+  assert.equal(p.terminals[0].id, '38353'); assert.equal(p.terminals[0].location, 'LOS ANGELES, CA'); assert.equal(p.terminals[0].inspections.length, 2);
+  const s = summarizeChp(p);
+  assert.equal(s.csatLast.date, '03/13/2025'); assert.equal(s.csatUnsatisfactory, 1);
+  assert.equal(s.inspectionCount, 2); assert.equal(s.terminalUnsatisfactory, 1); assert.equal(s.lastInspection, '7/15/2025');
+  assert.equal(s.terminals[0].inspections[0].date, '7/15/2025');
 });

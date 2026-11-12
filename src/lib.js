@@ -577,3 +577,85 @@ export function parseDmvPermits(text) {
     workersCompInsurer: dmvText(at(r, 'Workers Comp. Insurance Co')),
   })).filter((p) => p.ca);
 }
+
+// ---- CHP Carrier Inspection Results (carriersafety.chp.ca.gov) ----
+const unent = (s) => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&nbsp;/g, ' ');
+const htmlText = (s) => clean(unent(String(s).replace(/<br\s*\/?>/gi, ' | ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')));
+const cellsOf = (tr) => [...tr.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => m[1]);
+
+// Search results: one row per carrier. Returns [] when the table is missing or empty.
+export function parseChpSearch(html) {
+  const i = html.indexOf('id="tableSearchCarrier"');
+  if (i < 0) return [];
+  const tbody = html.slice(i, html.indexOf('</table>', i));
+  const out = [];
+  for (const tr of tbody.match(/<tr\b[\s\S]*?<\/tr>/gi) || []) {
+    const c = cellsOf(tr);
+    if (c.length < 7) continue;
+    const parts = htmlText(c[4]).split('|').map(clean).filter(Boolean);
+    const other = htmlText(c[7] || '');
+    const pick = (label) => clean((other.match(new RegExp(label + '\\s*#s:\\s*(.*?)(?=\\s+(?:Cal-T|Docket|PSG|PSC|TCP)\\s*#s:|$)', 'i')) || [])[1]);
+    const val = (v) => (v && !/^n\/a$/i.test(v) ? v : null);
+    out.push({
+      ca: digits(htmlText(c[1])).replace(/^0+(?=\d)/, ''),
+      dot: digits(htmlText(c[2])) || null,
+      status: htmlText(c[3]),
+      name: parts[0] || '',
+      dba: (parts.find((p) => /^DBA:/i.test(p)) || '').replace(/^DBA:\s*/i, '') || null,
+      city: htmlText(c[5]),
+      location: htmlText(c[6]),
+      calT: val(pick('Cal-T')), docket: val(pick('Docket')), psc: val(pick('PS[GC]')),
+    });
+  }
+  return out.filter((r) => r.ca);
+}
+
+// Terminal inspection results for one CA number: CSAT ratings plus ratings per California terminal.
+export function parseChpTerminal(html) {
+  const csat = [];
+  const ci = html.indexOf('id="tableCSAT"');
+  if (ci >= 0) {
+    for (const tr of html.slice(ci, html.indexOf('</table>', ci)).match(/<tr\b[\s\S]*?<\/tr>/gi) || []) {
+      const c = cellsOf(tr).map(htmlText);
+      if (c.length === 2) csat.push({ date: c[0], rating: c[1] });
+    }
+  }
+  const terminals = [];
+  for (const block of html.split(/Inspection Results for Terminal #/i).slice(1)) {
+    const id = (block.match(/^\s*(\d+)/) || [])[1];
+    const status = htmlText((block.match(/Current Status:\s*([^<]*)/i) || [])[1] || '');
+    const location = htmlText((block.match(/Location:\s*([^<]*)/i) || [])[1] || '');
+    const ti = block.indexOf('id="tableInspection"');
+    const inspections = [];
+    if (ti >= 0) {
+      for (const tr of block.slice(ti, block.indexOf('</table>', ti)).match(/<tr\b[\s\S]*?<\/tr>/gi) || []) {
+        const c = cellsOf(tr).map(htmlText);
+        if (c.length < 7) continue;
+        inspections.push({ date: c[0], maintenance: c[1], driver: c[2], equipment: c[3], hazmat: c[4], terminal: c[5], category: c[6] });
+      }
+    }
+    terminals.push({ id: id || null, status, location, inspections });
+  }
+  return { csat, terminals };
+}
+
+// Compact summary for the API: keep the latest rows, count everything.
+export function summarizeChp(parsed, { maxTerminals = 5, maxRows = 6 } = {}) {
+  const ts = (d) => { const m = /^(\d+)\/(\d+)\/(\d{4})$/.exec(d); return m ? Date.UTC(+m[3], +m[1] - 1, +m[2]) : 0; };
+  const unsat = (r) => /^unsatisfactory/i.test(r);
+  const all = parsed.terminals.flatMap((t) => t.inspections);
+  const csat = [...parsed.csat].sort((a, b) => ts(b.date) - ts(a.date));
+  return {
+    csat: csat.slice(0, 5),
+    csatUnsatisfactory: csat.filter((r) => unsat(r.rating)).length,
+    csatLast: csat[0] || null,
+    inspectionCount: all.length,
+    terminalUnsatisfactory: all.filter((r) => unsat(r.terminal)).length,
+    lastInspection: all.length ? all.reduce((a, b) => (ts(b.date) > ts(a.date) ? b : a)).date : null,
+    terminalCount: parsed.terminals.length,
+    terminals: parsed.terminals.slice(0, maxTerminals).map((t) => ({
+      ...t, inspectionCount: t.inspections.length,
+      inspections: [...t.inspections].sort((a, b) => ts(b.date) - ts(a.date)).slice(0, maxRows),
+    })),
+  };
+}

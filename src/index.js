@@ -5,12 +5,14 @@
 
 import {
   clean, digits, soqlStr, fmtPhone, normPhone, splitStreet, normalizeCarrier, brief, matchAddresses, buildSignals, buildHistory, statusLabel,
-  parseDmvPermits, padCa, normName,
+  parseDmvPermits, padCa, normName, parseChpSearch, parseChpTerminal, summarizeChp,
 } from './lib.js';
 
 const SODA = 'https://data.transportation.gov/resource/';
 const CENSUS = 'az4n-8mr2';
 const DMV_CSV = 'https://analytics.dmv.ca.gov/t/TableauProduction01/views/ActiveMCPPermitSearch/SearchResults.csv';
+const CHP = 'https://carriersafety.chp.ca.gov';
+const CHP_UA = { 'user-agent': 'Dotty carrier lookup (dotty.cleverghosts.com)' };
 const DMV_PAGE = 'https://www.dmv.ca.gov/portal/vehicle-industry-services/motor-carrier-services-mcs/motor-carrier-permits/active-motor-carriers/';
 
 // Authority and insurance history. FMCSA moved to a new registration system (Motus) on 2026-05-14:
@@ -123,15 +125,66 @@ async function dmvPermits(env, field, value) {
   return field === 'CA number' ? rows.filter((r) => r.ca === value) : rows.filter((r) => normName(r.name) === normName(value));
 }
 
-async function caForCarrier(env, c) {
+// CHP Carrier Inspection Results. The search form needs a per-session anti-forgery token and cookie, so
+// load the page, then post the search. The inspection endpoint takes a plain POST.
+async function chpSearch(type, value) {
+  const home = await fetch(CHP + '/', { headers: CHP_UA, signal: AbortSignal.timeout(7000) });
+  if (!home.ok) throw new Error(`CHP ${home.status}`);
+  const html = await home.text();
+  const token = (html.match(/name="__RequestVerificationToken"[^>]*?value="([^"]+)"/) || [])[1];
+  const ip = (html.match(/name="Parameters\.UserIPAddress"[^>]*?value="([^"]*)"/) || [])[1] || '';
+  if (!token) throw new Error('CHP form changed');
+  const cookie = (home.headers.getSetCookie ? home.headers.getSetCookie() : []).map((c) => c.split(';')[0]).join('; ');
+  const body = new URLSearchParams({
+    ViewName: 'SearchCarrier', __RequestVerificationToken: token, 'Parameters.UserIPAddress': ip,
+    'Parameters.IdentifierType': type, 'Parameters.Identifier': String(value).replace(/^0+(?=\d)/, ''),
+    'Parameters.IdentifierSearchType': 'E', 'Parameters.BusinessName': '', 'Parameters.BusinessNameSearchType': 'E',
+    'Parameters.Address': '', 'Parameters.AddressSearchType': 'E', 'Parameters.City': '', 'Parameters.Country': '', 'Parameters.State': '',
+  });
+  const res = await fetch(CHP + '/Home/SearchCarrier', {
+    method: 'POST', body, signal: AbortSignal.timeout(8000),
+    headers: { ...CHP_UA, 'content-type': 'application/x-www-form-urlencoded', cookie, referer: CHP + '/' },
+  });
+  if (!res.ok) throw new Error(`CHP ${res.status}`);
+  const text = await res.text();
+  if (!text.includes('tableSearchCarrier') && !/no (records|results|carriers)/i.test(text) && !text.includes('Parameters_Identifier')) throw new Error('CHP unexpected response');
+  return parseChpSearch(text);
+}
+
+async function chpRetry(type, value) {
+  try { return await chpSearch(type, value); } catch { return chpSearch(type, value); }
+}
+
+async function chpInspections(ca) {
+  const res = await fetch(CHP + '/Home/TerminalResult', {
+    method: 'POST', body: new URLSearchParams({ canbr: String(ca) }), signal: AbortSignal.timeout(8000),
+    headers: { ...CHP_UA, 'content-type': 'application/x-www-form-urlencoded', 'x-requested-with': 'XMLHttpRequest' },
+  });
+  if (!res.ok) throw new Error(`CHP ${res.status}`);
+  return summarizeChp(parseChpTerminal(await res.text()));
+}
+
+async function caForCarrier(env, c, chpRow) {
+  if (c.state !== 'CA' && !chpRow) return null;
+  const out = { available: true, found: false, permits: [], page: DMV_PAGE, chp: null, chpPage: CHP + '/' };
+  if (!chpRow) { try { chpRow = (await chpRetry('DOT', c.dot)).find((r) => r.dot === String(c.dot)); } catch { out.chpDown = true; } }
+  if (chpRow) {
+    const [insp, dmv] = await Promise.all([
+      chpInspections(chpRow.ca).catch(() => null),
+      dmvPermits(env, 'CA number', padCa(chpRow.ca)).catch(() => null),
+    ]);
+    out.chp = { ...chpRow, inspections: insp, inspectionsDown: !insp };
+    if (dmv && dmv.length) { out.found = true; out.permits = dmv.slice(0, 5).map((p) => ({ ...p, phoneMatch: p.phone ? [c.phone, c.cell].filter(Boolean).includes(p.phone) : null })); }
+    return out;
+  }
   if (c.state !== 'CA') return null;
   try {
     const phones = new Set([c.phone, c.cell].filter(Boolean));
     const permits = (await dmvPermits(env, 'Legal Name', c.legalName)).slice(0, 5)
       .map((p) => ({ ...p, phoneMatch: p.phone ? phones.has(p.phone) : null }));
-    return { available: true, found: permits.length > 0, permits, page: DMV_PAGE };
+    return { ...out, found: permits.length > 0, permits };
   } catch {
-    return { available: false, page: DMV_PAGE };
+    return { available: false, page: DMV_PAGE, chpDown: out.chpDown || false, chpPage: out.chpPage };
   }
 }
 
@@ -322,7 +375,14 @@ async function lookup(env, rawQ, type) {
   let rows = [];
   let searchedAs = p.kind;
   let preCa = null;
+  let chpRow = null;
   if (p.kind === 'ca') {
+    try { chpRow = (await chpRetry('CARRIER', p.value)).find((r) => r.ca === p.value.replace(/^0+(?=\d)/, '') && r.dot) || null; } catch { chpRow = null; }
+  }
+  if (chpRow) {
+    rows = await byDot(env, chpRow.dot);
+    searchedAs = 'ca';
+  } else if (p.kind === 'ca') {
     let permit;
     try { [permit] = await dmvPermits(env, 'CA number', p.value); } catch {
       return { status: 502, body: { error: 'The California DMV permit list is not responding. Try again in a minute.' } };
@@ -375,7 +435,7 @@ async function lookup(env, rawQ, type) {
 
   const carrier = normalizeCarrier(rows[0]);
   const [xref, qc, history, ca] = await Promise.all([
-    crossRef(env, carrier), qcCarrier(env, carrier.dot), historyData(env, carrier), preCa ? preCa : caForCarrier(env, carrier),
+    crossRef(env, carrier), qcCarrier(env, carrier.dot), historyData(env, carrier), preCa ? preCa : caForCarrier(env, carrier, chpRow),
   ]);
   const { signals, level } = buildSignals({ carrier, qc, xref, history });
 
@@ -436,9 +496,9 @@ export default {
       }
       const cache = typeof caches !== 'undefined' ? caches.default : null;
       // Versioned cache key: bump the number when the response shape changes.
-      const cacheKey = new Request(`${url.origin}/_c/3${url.pathname}${url.search}`);
+      const cacheKey = new Request(`${url.origin}/_c/4${url.pathname}${url.search}`);
       // Long-lived copy of the last good answer, served only when a fresh lookup fails.
-      const staleKey = new Request(`${url.origin}/_s/3${url.pathname}${url.search}`);
+      const staleKey = new Request(`${url.origin}/_s/4${url.pathname}${url.search}`);
       if (cache) {
         const hit = await cache.match(cacheKey);
         if (hit) return hit;
