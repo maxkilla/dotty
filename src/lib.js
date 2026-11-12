@@ -166,6 +166,15 @@ export function buildSignals({ carrier: c, qc, xref, now = new Date() }) {
       add('insurance-short', 'high', 'Liability insurance on file is below the required amount',
         `On file: ${qc.bipdOnFile}, required: ${qc.bipdRequired} (units as reported by FMCSA).`);
     }
+    for (const [kind, rate, avg, insp] of [
+      ['Vehicle', qc.vehicleOosRate, qc.vehicleOosAvg, qc.vehicleInsp],
+      ['Driver', qc.driverOosRate, qc.driverOosAvg, qc.driverInsp],
+    ]) {
+      if (rate != null && avg && insp >= 10 && rate >= avg * 1.5) {
+        add(`oos-${kind.toLowerCase()}`, 'medium', `${kind} out-of-service rate is well above average`,
+          `${rate.toFixed(1)}% vs ${avg.toFixed(1)}% national average over ${insp} inspections.`);
+      }
+    }
   }
 
   // --- Staleness ---

@@ -113,6 +113,10 @@ async function qcCarrier(env, dot) {
       crashTotal: num(c.crashTotal),
       vehicleOosRate: num(c.vehicleOosRate),
       driverOosRate: num(c.driverOosRate),
+      vehicleOosAvg: num(c.vehicleOosRateNationalAverage),
+      driverOosAvg: num(c.driverOosRateNationalAverage),
+      vehicleInsp: num(c.vehicleInsp),
+      driverInsp: num(c.driverInsp),
     };
   } catch {
     return { available: false, reason: 'timeout_or_network' };

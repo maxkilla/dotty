@@ -114,3 +114,11 @@ test('parseQuery sanitizes names', () => {
   assert.deepEqual(parseQuery("x' OR 1=1 --  abc"), { kind: 'name', value: "x' OR 1 1 - abc" });
   assert.equal(parseQuery('=== ---').kind, 'bad');
 });
+
+test('OOS rate signal needs volume and 1.5x the national average', () => {
+  const c = normalizeCarrier(row());
+  const ids = (qc) => buildSignals({ carrier: c, qc: { found: true, ...qc }, xref: emptyX(), now: NOW }).signals.map((s) => s.id);
+  assert.ok(ids({ vehicleOosRate: 30, vehicleOosAvg: 20, vehicleInsp: 50 }).includes('oos-vehicle'));
+  assert.ok(!ids({ vehicleOosRate: 30, vehicleOosAvg: 20, vehicleInsp: 5 }).includes('oos-vehicle'));
+  assert.ok(!ids({ vehicleOosRate: 22, vehicleOosAvg: 20, vehicleInsp: 50 }).includes('oos-vehicle'));
+});
