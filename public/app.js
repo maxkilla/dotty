@@ -76,6 +76,29 @@ function renderHistory(hist) {
       partial ? `Some history sources failed to load (${hist.errors.join(', ')}).` : ''));
 }
 
+const SOS = {
+  CA: 'https://bizfileonline.sos.ca.gov/search/business',
+  FL: 'https://search.sunbiz.org/Inquiry/CorporationSearch/ByName',
+  NY: 'https://apps.dos.ny.gov/publicInquiry/',
+  DE: 'https://icis.corp.delaware.gov/ecorp/entitysearch/namesearch.aspx',
+  TX: 'https://www.sos.state.tx.us/corp/sosda/index.shtml',
+};
+
+function renderOwnership(c) {
+  const name = c.legalName;
+  const st = c.state;
+  const q = encodeURIComponent(name);
+  const links = [];
+  if (st && SOS[st]) links.push([`${st} Secretary of State business search`, SOS[st]]);
+  else if (st) links.push([`${st} Secretary of State business search`, 'https://duckduckgo.com/?q=' + encodeURIComponent(`${st} secretary of state business entity search`)]);
+  links.push(['OpenCorporates' + (st ? ` (${st})` : ''), `https://opencorporates.com/companies?q=${q}` + (st ? `&jurisdiction_code=us_${st.toLowerCase()}` : '')]);
+  return h('div', { class: 'card' },
+    h('h3', {}, 'Who owns this company?'),
+    h('p', { class: 'fine', style: 'margin-top:4px' }, 'FMCSA does not list owners. Search the state business registry for the legal name, then check the formation date, status, registered agent and managers.'),
+    h('ul', { class: 'ev' }, links.map(([t, u]) => h('li', {}, h('a', { href: u, target: '_blank', rel: 'noopener noreferrer' }, t + ' \u2197')))),
+    h('p', { class: 'fine' }, 'Search for: ', h('b', {}, name), '. The company may be registered in a different state than its FMCSA address. Many LLCs list only a registered agent, and a name match is a lead, not proof.'));
+}
+
 function renderCarrier(d) {
   const c = d.carrier;
   const [title, blurb] = LEVELS[d.level];
@@ -93,6 +116,7 @@ function renderCarrier(d) {
     h('div', { class: 'card' },
       d.signals.length ? d.signals.map(signal) : h('p', { class: 'fine' }, 'No signals to report.')),
     renderHistory(d.history),
+    renderOwnership(c),
     h('div', { class: 'card' },
       h('dl', {},
         row('Address', c.address),

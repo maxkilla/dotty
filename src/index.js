@@ -315,6 +315,7 @@ async function lookup(env, rawQ, type) {
         status: carrier.status,
         statusLabel: statusLabel(carrier.status),
         dockets: carrier.dockets.map((d) => ({ ...d, statusLabel: statusLabel(d.status) })),
+        state: carrier.state || null,
         phone: fmtPhone(carrier.phone) || null,
         address: [carrier.street, [carrier.city, carrier.state].filter(Boolean).join(', '), carrier.zip].filter(Boolean).join(' · '),
         powerUnits: carrier.powerUnits,
