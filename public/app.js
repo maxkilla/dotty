@@ -171,6 +171,10 @@ function renderList(d) {
       h('li', {}, h('button', { class: 'link', type: 'button', onclick: () => run(String(m.dot), 'dot') }, carrierLine(m))))));
 }
 
+function errCard(msg, retry, q, type) {
+  return h('div', { class: 'card err' }, msg, retry ? [' ', h('button', { class: 'link', type: 'button', onclick: () => run(q, type) }, 'Retry')] : null);
+}
+
 async function run(q, type) {
   $('#q').value = q;
   $('#t').value = type || 'auto';
@@ -181,14 +185,14 @@ async function run(q, type) {
   try {
     const res = await fetch('/api/lookup?q=' + encodeURIComponent(q) + '&type=' + encodeURIComponent(type || 'auto'));
     const d = await res.json();
-    if (!res.ok) { out.replaceChildren(h('div', { class: 'card err' }, d.error || 'Something went wrong.')); return; }
-    out.replaceChildren(...[].concat(d.mode === 'list' ? renderList(d) : renderCarrier(d)));
+    if (!res.ok) { out.replaceChildren(errCard(d.error || 'Something went wrong.', res.status >= 500, q, type)); return; }
+    out.replaceChildren(...[].concat(d.stale ? h('p', { class: 'fine', style: 'margin-top:0' }, 'Live data is temporarily unavailable. Showing the last saved result, which may be out of date.') : null, d.mode === 'list' ? renderList(d) : renderCarrier(d)).filter(Boolean));
     const u = new URL(location.href);
     u.searchParams.set('q', q);
     u.searchParams.set('type', type || 'auto');
     history.replaceState(null, '', u);
   } catch {
-    out.replaceChildren(h('div', { class: 'card err' }, 'Network error. Try again.'));
+    out.replaceChildren(errCard('Network error.', true, q, type));
   } finally {
     go.disabled = false;
   }

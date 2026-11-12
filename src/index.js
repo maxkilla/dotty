@@ -105,12 +105,20 @@ export function parseQuery(q, type = 'auto') {
 // own field names. Rows are re-checked here because a wrong field name silently returns an unfiltered page.
 async function dmvPermits(env, field, value) {
   const url = `${DMV_CSV}?${encodeURIComponent(field)}=${encodeURIComponent(value)}`;
-  const res = await fetch(url, {
-    headers: { accept: 'text/csv', 'user-agent': 'Dotty carrier lookup (dotty.cleverghosts.com)' },
-    signal: AbortSignal.timeout(7000),
-    cf: { cacheTtl: 3600, cacheEverything: true },
-  });
-  if (!res.ok) throw new Error(`DMV ${res.status}`);
+  let res;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      res = await fetch(url, {
+        headers: { accept: 'text/csv', 'user-agent': 'Dotty carrier lookup (dotty.cleverghosts.com)' },
+        signal: AbortSignal.timeout(7000),
+        cf: { cacheTtl: 3600, cacheEverything: true },
+      });
+      if (res.ok || (res.status < 500 && res.status !== 429)) break;
+    } catch (e) {
+      if (attempt) throw e;
+    }
+  }
+  if (!res || !res.ok) throw new Error(`DMV ${res ? res.status : 'unreachable'}`);
   const rows = parseDmvPermits(await res.text());
   return field === 'CA number' ? rows.filter((r) => r.ca === value) : rows.filter((r) => normName(r.name) === normName(value));
 }
@@ -429,18 +437,34 @@ export default {
       const cache = typeof caches !== 'undefined' ? caches.default : null;
       // Versioned cache key: bump the number when the response shape changes.
       const cacheKey = new Request(`${url.origin}/_c/3${url.pathname}${url.search}`);
+      // Long-lived copy of the last good answer, served only when a fresh lookup fails.
+      const staleKey = new Request(`${url.origin}/_s/3${url.pathname}${url.search}`);
       if (cache) {
         const hit = await cache.match(cacheKey);
         if (hit) return hit;
       }
+      const serveStale = async () => {
+        const old = cache && (await cache.match(staleKey));
+        if (!old) return null;
+        const body = await old.json();
+        return json({ ...body, stale: true }, 200, { 'cache-control': 'no-store' });
+      };
       let r;
       try {
-        r = await lookup(env, url.searchParams.get('q'), url.searchParams.get('type') || 'auto');
+        // Overall deadline so a slow upstream cannot hang the page.
+        r = await Promise.race([
+          lookup(env, url.searchParams.get('q'), url.searchParams.get('type') || 'auto'),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('deadline')), 22000)),
+        ]);
       } catch (e) {
-        return json({ error: 'FMCSA data is temporarily unavailable. Try again in a minute.' }, 502);
+        return (await serveStale()) || json({ error: 'FMCSA data is temporarily unavailable. Try again in a minute.' }, 502);
       }
+      if (r.status >= 500) return (await serveStale()) || json(r.body, r.status, { 'cache-control': 'no-store' });
       const res = json(r.body, r.status, r.status === 200 && r.cacheable ? { 'cache-control': 'public, max-age=300, s-maxage=3600' } : { 'cache-control': 'no-store' });
-      if (cache && r.status === 200 && r.cacheable) ctx.waitUntil(cache.put(cacheKey, res.clone()));
+      if (cache && r.status === 200 && r.cacheable) {
+        ctx.waitUntil(cache.put(cacheKey, res.clone()));
+        ctx.waitUntil(cache.put(staleKey, json(r.body, 200, { 'cache-control': 'public, s-maxage=604800' })));
+      }
       return res;
     }
 
