@@ -121,5 +121,25 @@ $('#f').addEventListener('submit', (e) => {
 
 const pageType = document.body.dataset.type || 'auto';
 $('#t').value = pageType;
+
+// Clicking the title starts a clean session: clear the box, results and URL state.
+function reset() {
+  $('#q').value = '';
+  $('#t').value = pageType;
+  $('#out').replaceChildren();
+  const u = new URL(location.href);
+  u.search = '';
+  history.replaceState(null, '', u);
+  $('#q').focus();
+}
+const title = document.querySelector('h1');
+if (title) {
+  title.style.cursor = 'pointer';
+  title.tabIndex = 0;
+  title.setAttribute('role', 'button');
+  title.title = 'Start over';
+  title.addEventListener('click', reset);
+  title.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reset(); } });
+}
 const init = new URL(location.href).searchParams;
 if (init.get('q')) run(init.get('q'), init.get('type') || pageType);
