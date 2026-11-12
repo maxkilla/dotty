@@ -564,7 +564,8 @@ const dmvText = (s) => { const v = clean(s); return /^(NA|N\/A|NONE)$/i.test(v) 
 
 export function parseDmvPermits(text) {
   const rows = parseCsv(text);
-  if (!rows.length || clean(rows[0][0]) !== 'CA number') throw new Error('Unexpected DMV response');
+  if (!rows.length) return []; // DMV returns an empty body when nothing matches
+  if (clean(rows[0][0]) !== 'CA number') throw new Error('Unexpected DMV response');
   const h = rows[0].map(clean);
   const at = (r, name) => r[h.indexOf(name)];
   return rows.slice(1).map((r) => ({

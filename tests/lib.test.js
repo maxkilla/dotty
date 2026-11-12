@@ -146,5 +146,6 @@ test('DMV permit CSV parsing', () => {
   assert.equal(p[1].dba, '');
   assert.equal(p[1].workersCompInsurer, '');
   assert.throws(() => parseDmvPermits('<html>blocked</html>'));
+  assert.deepEqual(parseDmvPermits(''), []);
   assert.equal(normName('A & S Metal, Recycling Inc.'), normName('A AND S METAL RECYCLING INC'));
 });
