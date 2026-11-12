@@ -117,7 +117,9 @@ function renderCarrier(d) {
 function renderList(d) {
   if (!d.matches.length) return h('div', { class: 'card' }, `No carriers matched "${d.query}".`);
   return h('div', { class: 'card' },
-    h('p', { class: 'fine' }, `${d.matches.length}${d.matches.length === 25 ? '+' : ''} matches. Pick one:`),
+    h('p', { class: 'fine' }, d.reverse
+      ? `${d.total > 50 ? '50+' : d.total} carrier${d.total === 1 ? '' : 's'} on file with this ${d.reverse}${d.inactive ? ` (${d.inactive} inactive)` : ''}. Pick one:`
+      : `${d.matches.length}${d.matches.length === 25 ? '+' : ''} matches. Pick one:`),
     h('ul', { class: 'matches' }, d.matches.map((m) =>
       h('li', {}, h('button', { class: 'link', type: 'button', onclick: () => run(String(m.dot), 'dot') }, carrierLine(m))))));
 }

@@ -122,3 +122,33 @@ test('there is no "no active filing" signal', () => {
   const insHistLegacy = [hist('01/01/2024', '03/22/2024')];
   assert.ok(!ids({ insHistLegacy }).some((id) => /none/.test(id)));
 });
+
+import { normalizeCarrier as nc } from '../src/lib.js';
+import { parseQuery } from '../src/index.js';
+
+test('parseQuery reads phone, email and address for reverse lookup', () => {
+  assert.deepEqual(parseQuery('(214) 555-0199'), { kind: 'phone', value: '2145550199' });
+  assert.deepEqual(parseQuery('Dispatch@Example.com'), { kind: 'email', value: 'dispatch@example.com' });
+  assert.equal(parseQuery('44110').kind, 'number');
+  const a = parseQuery('123 Main Street, Dallas TX 75001', 'address');
+  assert.equal(a.kind, 'address');
+  assert.equal(a.zip, '75001');
+  assert.equal(parseQuery('Main Street', 'address').kind, 'bad');
+});
+
+const brief = (dot, status) => ({ dot, name: 'N' + dot, status });
+const xr = (o = {}) => ({ errors: [], truncated: {}, phone: [], address: { same: [], building: [] }, name: [], officer: [], email: [], priorRevoke: null, ...o });
+const cham = (xref, hist) => buildSignals({ carrier, xref, history: buildHistory({ now: NOW, ...hist }), now: NOW }).signals.find((s) => s.id === 'possible-chameleon');
+const newGrant = { authLegacy: [{ docket_number: 'MC001515', original_action_desc: 'GRANTED', orig_served_date: '09/01/2026' }] };
+const oldGrant = { authLegacy: [{ docket_number: 'MC001515', original_action_desc: 'GRANTED', orig_served_date: '09/01/2005' }] };
+
+test('chameleon: new authority sharing two attributes with an inactive carrier is high', () => {
+  const s = cham(xr({ phone: [brief(9, 'I')], address: { same: [brief(9, 'I')], building: [] } }), newGrant);
+  assert.equal(s.severity, 'high');
+});
+
+test('chameleon: one shared attribute is medium; active partners or old carriers do not trigger', () => {
+  assert.equal(cham(xr({ phone: [brief(9, 'I')] }), newGrant).severity, 'medium');
+  assert.equal(cham(xr({ phone: [brief(9, 'A')] }), newGrant), undefined);
+  assert.equal(cham(xr({ phone: [brief(9, 'I')] }), oldGrant), undefined);
+});

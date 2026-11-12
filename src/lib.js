@@ -398,6 +398,26 @@ function sharedSeverity(rows, cap = 'high') {
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
+// Possible "chameleon" carrier: newly authorized and sharing contact details with inactive carriers.
+function chameleonSignal(c, xref, history, now, add) {
+  const links = new Map();
+  const mark = (list, via) => { for (const e of list || []) { const l = links.get(e.dot) || { e, via: new Set() }; l.via.add(via); links.set(e.dot, l); } };
+  mark(xref.phone, 'phone'); mark(xref.address.same, 'address'); mark(xref.email, 'email'); mark(xref.officer, 'officer');
+  // A shared officer name alone is too weak (name collisions), so it only counts alongside another link.
+  const inactive = [...links.values()].filter((l) => l.e.status && l.e.status !== 'A' && [...l.via].some((v) => v !== 'officer'));
+  if (!inactive.length) return;
+  const first = history && !history.errors.includes('auth-legacy') ? parseDate(history.authority.firstGranted) : null;
+  const isNew = first && monthsBetween(first, now) <= 18;
+  const strong = inactive.some((l) => l.via.size >= 2);
+  if (!isNew && !c.priorRevoke.flag) return;
+  const sev = strong || c.priorRevoke.flag ? 'high' : 'medium';
+  const via = [...new Set(inactive.flatMap((l) => [...l.via]))].join(', ');
+  add('possible-chameleon', sev,
+    `Possible re-registration: new authority linked to ${plural(inactive.length, 'inactive carrier')}`,
+    `${isNew ? `Authority was first granted ${history.authority.firstGranted}, and this` : 'This'} carrier shares ${via} with inactive carriers. Operators whose authority lapsed sometimes re-register under a new name. Related companies do this legitimately too, so treat it as a lead to verify, not a finding.`,
+    inactive.map((l) => l.e));
+}
+
 export function buildSignals({ carrier: c, qc, xref, history, now = new Date() }) {
   const out = [];
   const add = (id, severity, title, detail, evidence) =>
@@ -506,6 +526,7 @@ export function buildSignals({ carrier: c, qc, xref, history, now = new Date() }
   }
 
   if (history) historySignals(history, c, qc, now, add);
+  if (xref && history) chameleonSignal(c, xref, history, now, add);
 
   out.sort((a, b) => RANK[b.severity] - RANK[a.severity]);
   const top = out.length ? out[0].severity : 'info';

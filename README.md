@@ -42,9 +42,13 @@ FMCSA is moving from the legacy licensing system to Motus. The legacy datasets a
 
 Socrata app token (`SOCRATA_APP_TOKEN`) is optional and only needed if queries get throttled.
 
+## Reverse lookup
+
+Search by phone, email or `street, ZIP` (choose Address) to list every carrier on file with it. Phone and email are auto-detected in Auto mode. Results show up to 50 carriers.
+
 ## Signals
 
-Inactive census status or docket, no docket, stale MCS-150 (24+ months), conditional/unsatisfactory safety rating, no fleet reported, mailbox address, prior-revocation flag, phone / address / email / name shared with other DOTs (louder when the others are inactive), shared officer within the same state. History signals: new authority (granted within 12 months), recent revocation (36 months), repeated revocation notices, gaps between liability or bond filings, filing set to cancel (high within 14 days), recently changed insurer. With a webKey: not allowed to operate, out-of-service order, insurance below required.
+Inactive census status or docket, no docket, stale MCS-150 (24+ months), conditional/unsatisfactory safety rating, no fleet reported, mailbox address, prior-revocation flag, phone / address / email / name shared with other DOTs (louder when the others are inactive), shared officer within the same state. History signals: new authority (granted within 12 months), recent revocation (36 months), repeated revocation notices, gaps between liability or bond filings, filing set to cancel (high within 14 days), recently changed insurer. Possible re-registration ("chameleon"): new authority (18 months) that shares phone, address or email with inactive carriers; high when two attributes match or FMCSA flags a prior revocation, medium for one. A shared officer name alone never triggers it. With a webKey: not allowed to operate, out-of-service order, insurance below required.
 
 ## Known limits
 

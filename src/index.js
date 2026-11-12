@@ -4,7 +4,7 @@
 // Static UI is served from ./public by the assets binding.
 
 import {
-  clean, digits, soqlStr, fmtPhone, normalizeCarrier, brief, matchAddresses, buildSignals, buildHistory, statusLabel,
+  clean, digits, soqlStr, fmtPhone, normPhone, splitStreet, normalizeCarrier, brief, matchAddresses, buildSignals, buildHistory, statusLabel,
 } from './lib.js';
 
 const SODA = 'https://data.transportation.gov/resource/';
@@ -74,11 +74,33 @@ export function parseQuery(q, type = 'auto') {
     const n = digits(m ? m[2] : s).replace(/^0+/, '');
     return n ? { kind: 'docket', prefix, value: n } : { kind: 'bad' };
   }
+  const emailRe = /^[^\s@'"]+@[^\s@'"]+\.[A-Za-z]{2,}$/;
+  if (type === 'email' || (type === 'auto' && emailRe.test(s))) {
+    return emailRe.test(s) ? { kind: 'email', value: s.toLowerCase() } : { kind: 'bad' };
+  }
+  if (type === 'phone' || (type === 'auto' && /^[\d\s().+-]+$/.test(s) && digits(s).length >= 10)) {
+    const ph = normPhone(s);
+    return ph ? { kind: 'phone', value: ph } : { kind: 'bad' };
+  }
+  if (type === 'address') {
+    const zip = (s.match(/\b(\d{5})(?:-\d{4})?\s*$/) || [])[1];
+    const street = splitStreet(s.replace(/\b\d{5}(?:-\d{4})?\s*$/, '').replace(/,.*$/, '')).street;
+    return zip && /^\d+\s/.test(street) ? { kind: 'address', value: street, zip } : { kind: 'bad' };
+  }
   if (type === 'auto' && /^\d{1,8}$/.test(s)) return { kind: 'number', value: s.replace(/^0+/, '') || '0' };
   // Names: keep a conservative character set (also keeps WAF-triggering junk like "--" or "=" away from Socrata).
   const name = s.replace(/[^A-Za-z0-9 &.,'\/#()-]/g, ' ').replace(/-{2,}/g, '-').replace(/\s+/g, ' ').trim();
   if (name.replace(/[^A-Za-z0-9]/g, '').length >= 3) return { kind: 'name', value: name };
   return { kind: 'bad' };
+}
+
+async function reverse(env, p) {
+  let where;
+  if (p.kind === 'phone') where = `phone=${soqlStr(p.value)} OR cell_phone=${soqlStr(p.value)}`;
+  else if (p.kind === 'email') where = `upper(email_address)=${soqlStr(p.value.toUpperCase())}`;
+  else where = `phy_zip like ${soqlStr(p.zip + '%')} AND upper(phy_street) like ${soqlStr(p.value.replace(/[%_]/g, ' ') + '%')}`;
+  const rows = await soda(env, { $select: BRIEF_FIELDS, $where: where, $order: 'legal_name', $limit: '51' });
+  return rows.map((r) => brief(normalizeCarrier(r)));
 }
 
 const byDot = (env, dot) => soda(env, { $select: FULL_FIELDS, $where: `dot_number=${Number(dot)}`, $limit: '1' });
@@ -228,9 +250,27 @@ async function historyData(env, c) {
 
 async function lookup(env, rawQ, type) {
   const q = clean(rawQ).slice(0, 80);
-  if (!q) return { status: 400, body: { error: 'Enter a DOT number, MC number, or company name.' } };
+  if (!q) return { status: 400, body: { error: 'Enter a DOT number, MC number, company name, phone, email or address.' } };
   const p = parseQuery(q, type);
-  if (p.kind === 'bad') return { status: 400, body: { error: 'Could not read that. Try a DOT number, an MC number like MC123456, or at least 3 letters of a name.' } };
+  if (p.kind === 'bad') return { status: 400, body: { error: 'Could not read that. Try a DOT number, an MC number like MC123456, a phone, an email, or at least 3 letters of a name.' } };
+
+  if (p.kind === 'phone' || p.kind === 'email' || p.kind === 'address') {
+    const all = await reverse(env, p);
+    const matches = all.slice(0, 50);
+    return {
+      status: 200,
+      cacheable: true,
+      body: {
+        mode: 'list',
+        query: q,
+        reverse: p.kind,
+        total: all.length,
+        truncated: all.length > 50,
+        inactive: matches.filter((m) => m.status !== 'A').length,
+        matches,
+      },
+    };
+  }
 
   let rows = [];
   let searchedAs = p.kind;
