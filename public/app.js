@@ -7,7 +7,7 @@ function h(tag, attrs, ...kids) {
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else if (v !== false && v != null) e.setAttribute(k, v);
   }
-  for (const kid of kids.flat()) {
+  for (const kid of kids.flat(Infinity)) {
     if (kid == null || kid === false) continue;
     e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
   }
