@@ -259,6 +259,12 @@ export default {
     if (url.pathname === '/api/health') return json({ ok: true, liveFmcsa: Boolean(env.FMCSA_WEB_KEY) });
 
     if (url.pathname === '/api/lookup') {
+      // Optional: bind a Cloudflare rate limiter as RL (see README) to enable per-IP limiting.
+      if (env.RL) {
+        const ip = request.headers.get('cf-connecting-ip') || 'anon';
+        const { success } = await env.RL.limit({ key: ip });
+        if (!success) return json({ error: 'Too many lookups. Wait a minute and try again.' }, 429, { 'retry-after': '60' });
+      }
       const cache = typeof caches !== 'undefined' ? caches.default : null;
       if (cache) {
         const hit = await cache.match(request);

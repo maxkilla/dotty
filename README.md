@@ -47,4 +47,9 @@ Inactive census status or docket, no docket, stale MCS-150 (24+ months), conditi
 - Census `add_date` is not the authority grant date, so there is no "new authority" signal yet.
 - No change history (needs a database): no "contact info changed after approval", watchlists or alerts.
 - Census data lags FMCSA systems and is self-reported.
-- Responses are cached (Cache API, 1h). There is no rate limiting yet; add Cloudflare rate limiting before sharing the URL publicly.
+- Responses are cached (Cache API, 1h).
+- Rate limiting is off until you bind a Cloudflare rate limiter named `RL` (dashboard or `wrangler.toml`); the Worker uses it automatically when present. Do this before sharing the URL publicly.
+
+## Pages
+
+`/` (general), `/dot-lookup/` and `/mc-number-lookup/` share `public/app.js`; the last two are the SEO landing pages for the "dot lookup" and "mc number lookup" keywords.
