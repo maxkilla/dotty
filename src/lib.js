@@ -40,10 +40,15 @@ export const isMailbox = (raw) => /\bPMB\b|\bP\.?\s?O\.?\s?BOX\b/i.test(clean(ra
 
 export function parseDate(s) {
   const t = clean(s);
-  const m = t.match(/^(\d{4})(\d{2})(\d{2})/) || t.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return null;
-  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-  return Number.isNaN(d.getTime()) ? null : d;
+  let y, mo, d, m;
+  if ((m = t.match(/^(\d{4})(\d{2})(\d{2})/) || t.match(/^(\d{4})-(\d{2})-(\d{2})/))) {
+    [y, mo, d] = [+m[1], +m[2], +m[3]];
+  } else if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))) {
+    [mo, d, y] = [+m[1], +m[2], +m[3]];
+  } else return null;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1900) return null;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
 export const monthsBetween = (a, b) =>
@@ -119,6 +124,267 @@ export function matchAddresses(carrier, rows) {
   return { same, building };
 }
 
+// ---- Authority + insurance history ---------------------------------------
+// Inputs are raw rows from the FMCSA "AuthHist", "Insur" and "InsHist" datasets. FMCSA moved to a new
+// registration system (Motus) on 2026-05-14: the legacy datasets are frozen at that date and the Motus
+// ones continue from it, so both are merged here.
+
+const DAY = 86400000;
+const within = (d, days, now) => d <= now && now - d <= days * DAY;
+const num = (v) => { const n = parseFloat(clean(v).replace(/,/g, '')); return Number.isFinite(n) ? n : null; };
+// "MC001515", "MC-1515" and "MC1515" are the same docket.
+export const docketKey = (s) => clean(s).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^([A-Z]{2})0+(?=\d)/, '$1');
+// Free-text reasons can carry email addresses (e.g. "Withdrawn by x@y.com"); never pass those on.
+const reasonText = (r) => clean(r).replace(/\S+@\S+/g, '').replace(/\s+/g, ' ').trim().slice(0, 160);
+
+const BIPD_FORM = /^(BMC-)?(91X?|82)$/i;
+const BOND_FORM = /^(BMC-)?84$/i;
+const INS_TYPE = { 1: 'Liability (BIPD)', 2: 'Cargo', 3: 'Surety bond', 4: 'Trust fund' };
+const CANCEL_REASONS = new Set(['CANCEL', 'TERM/CANCL', 'CANC/CANCL', 'REVOKED']);
+
+function authorityHistory(legacy, motus, now) {
+  const seen = new Set();
+  const events = [];
+  const push = (kind, date, docket, extra) => {
+    if (!date) return;
+    const key = `${kind}|${iso(date)}|${docket}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    events.push({ kind, date, docket, ...extra });
+  };
+
+  for (const r of legacy) {
+    const orig = clean(r.original_action_desc).toUpperCase();
+    const disp = clean(r.disp_action_desc).toUpperCase();
+    const od = parseDate(r.orig_served_date);
+    const dk = docketKey(r.docket_number);
+    if (orig === 'GRANTED') push('granted', od, dk);
+    else if (orig === 'REINSTATED') push('reinstated', od, dk);
+    else if (orig === 'INVOLUNTARY REVOCATION' || orig === 'SPECIAL INVOLUNTARY REVOCATION') {
+      push('notice', od, dk, { discontinued: disp === 'DISCONTINUED REVOCATION' });
+    } else if (orig === 'SUSPENDED') push('suspended', od, dk);
+    const dd = parseDate(r.disp_decided_date) || parseDate(r.disp_served_date);
+    if (disp === 'REVOKED' || disp === 'SAFETY REVOCATION') push('revoked', dd, dk);
+    else if (disp === 'SAFETY SUSPENSION') push('suspended', dd, dk);
+  }
+
+  const dockets = [];
+  for (const r of motus) {
+    const status = clean(r.op_auth_status);
+    const reason = clean(r.reason);
+    const when = parseDate(r.status_change_date);
+    const dk = docketKey(r.docket_number);
+    dockets.push({
+      docket: dk,
+      type: clean(r.op_auth_type),
+      status,
+      changed: iso(when),
+      // Only inactive/pending rows carry a reason worth showing.
+      reason: status === 'Inactive' || status === 'Pending' ? reasonText(reason) || null : null,
+    });
+    if (/^granted/i.test(reason)) push('granted', when, dk);
+    else if (/^reinstated/i.test(reason)) push('reinstated', when, dk);
+    else if (status === 'Inactive' && /revok/i.test(reason)) push('revoked', when, dk);
+    else if (status === 'Inactive' && /suspen/i.test(reason)) push('suspended', when, dk);
+  }
+
+  events.sort((a, b) => b.date - a.date);
+  const pick = (kind) => events.find((e) => e.kind === kind)?.date || null;
+  const grants = events.filter((e) => e.kind === 'granted');
+  const firstGranted = grants.length ? grants.reduce((m, e) => (e.date < m ? e.date : m), grants[0].date) : null;
+  const notices = events.filter((e) => e.kind === 'notice' && within(e.date, 730, now));
+
+  return {
+    firstGranted: iso(firstGranted),
+    lastRevoked: iso(pick('revoked')),
+    lastReinstated: iso(pick('reinstated')),
+    notices24: notices.length,
+    noticesDiscontinued24: notices.filter((e) => e.discontinued).length,
+    dockets,
+    recent: events
+      .filter((e) => within(e.date, 1095, now))
+      .slice(0, 12)
+      .map((e) => ({ date: iso(e.date), kind: e.kind, docket: e.docket })),
+  };
+}
+
+// Returns gaps (> 14 days) in a set of {s, e, kind} coverage intervals, plus the date coverage ends.
+function coverageGaps(intervals, now) {
+  const iv = [...intervals].sort((a, b) => a.s - b.s);
+  let maxEnd = null;
+  let endKinds = [];
+  const gaps = [];
+  for (const x of iv) {
+    if (maxEnd && x.s - maxEnd > 14 * DAY) gaps.push({ from: maxEnd, to: x.s });
+    if (!maxEnd || x.e > maxEnd) { maxEnd = x.e; endKinds = [x.kind]; } else if (x.e.getTime() === maxEnd.getTime()) endKinds.push(x.kind);
+  }
+  return {
+    gaps: gaps.filter((g) => within(g.to, 730, now)),
+    endsAt: maxEnd,
+    endKinds,
+  };
+}
+
+function insuranceHistory({ nowMotus, nowLegacy, histMotus, histLegacy }, now) {
+  const hist = [];
+  for (const r of histMotus) {
+    const t = clean(r.ins_type_desc).toUpperCase();
+    hist.push({
+      cat: /BIPD/.test(t) || clean(r.ins_type_code) === '1' ? 'bipd' : /SURETY/.test(t) || clean(r.ins_type_code) === '3' ? 'bond' : 'other',
+      reason: clean(r.filing_status_reason).toUpperCase(),
+      eff: parseDate(r.effective_date), end: parseDate(r.cancl_effective_date),
+      insurer: clean(r.insurance_company_name), policy: clean(r.policy_no),
+    });
+  }
+  for (const r of histLegacy) {
+    const f = clean(r.ins_form_code);
+    hist.push({
+      cat: BIPD_FORM.test(f) ? 'bipd' : BOND_FORM.test(f) ? 'bond' : 'other',
+      reason: clean(r.cancl_method).toUpperCase(),
+      eff: parseDate(r.effective_date), end: parseDate(r.cancl_effective_date),
+      insurer: clean(r.name_company), policy: clean(r.policy_no),
+    });
+  }
+  const kindOf = (reason) => (CANCEL_REASONS.has(reason) ? 'cancelled' : reason === 'TERM/REPL' ? 'replaced' : 'other');
+  const pkey = (policy, eff, insurer) => `${clean(policy)}|${iso(eff)}|${clean(insurer).toUpperCase()}`;
+
+  // Filings already ended (or scheduled to end) according to the history datasets.
+  const normPol = (p) => clean(p).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const ends = new Map();
+  const futureCancels = [];
+  for (const h of hist) {
+    if (!h.policy || !h.end) continue;
+    const kind = kindOf(h.reason);
+    if (h.eff && h.end > h.eff) ends.set(pkey(h.policy, h.eff, h.insurer), { end: h.end, kind });
+    if (kind === 'cancelled' && h.end > now) futureCancels.push({ pol: normPol(h.policy), end: h.end });
+  }
+
+  const current = new Map();
+  const addCurrent = (code, form, insurer, policy, eff, cov) => {
+    if (!eff) return;
+    const e = ends.get(pkey(policy, eff, insurer));
+    if (e && e.end <= now) return; // already cancelled/replaced
+    let cancelsOn = e ? e.end : null;
+    let cancelKind = e ? e.kind : null;
+    if (!cancelsOn) {
+      // A cancellation notice for the same policy number that takes effect after this filing began.
+      const f = futureCancels.find((x) => x.pol === normPol(policy) && eff < x.end);
+      if (f) { cancelsOn = f.end; cancelKind = 'cancelled'; }
+    }
+    const cat = code === '1' || BIPD_FORM.test(form) ? 'bipd' : code === '3' || BOND_FORM.test(form) ? 'bond' : 'other';
+    const key = `${policy}|${iso(eff)}|${code}`;
+    if (current.has(key)) return;
+    current.set(key, { cat, type: INS_TYPE[code] || 'Other', insurer, coverage: cov, eff, cancelsOn, cancelKind });
+  };
+  for (const r of nowMotus) addCurrent(clean(r.ins_type_code), clean(r.ins_form_code), clean(r.insurance_company_name), clean(r.policy_no), parseDate(r.effective_date), num(r.max_cov_amount));
+  for (const r of nowLegacy) {
+    const c = num(r.max_cov_amount);
+    addCurrent(clean(r.ins_type_code), clean(r.ins_form_code), clean(r.name_company), clean(r.policy_no), parseDate(r.effective_date), c == null ? null : c * 1000);
+  }
+  const byInsurer = new Map();
+  for (const p of current.values()) {
+    const k = `${p.type}|${p.insurer.toUpperCase()}`;
+    const prev = byInsurer.get(k);
+    if (!prev || (p.eff || 0) > (prev.eff || 0)) byInsurer.set(k, p);
+  }
+  const cur = [...byInsurer.values()].sort((a, b) => a.type.localeCompare(b.type) || (b.eff || 0) - (a.eff || 0));
+
+  const out = {};
+  for (const cat of ['bipd', 'bond']) {
+    const iv = [];
+    for (const h of hist) {
+      if (h.cat !== cat || !h.eff || !h.end || h.end < h.eff || h.reason === 'DUPLICATE') continue;
+      iv.push({ s: h.eff, e: h.end, kind: kindOf(h.reason) });
+    }
+    for (const c of cur) {
+      if (c.cat !== cat || !c.eff) continue;
+      iv.push({ s: c.eff, e: c.cancelsOn || (c.eff > now ? c.eff : now), kind: c.cancelsOn ? c.cancelKind : 'current' });
+    }
+    if (!iv.length) { out[cat] = null; continue; }
+    const g = coverageGaps(iv, now);
+    out[cat] = {
+      gaps: g.gaps.map((x) => ({ from: iso(x.from), to: iso(x.to), days: Math.round((x.to - x.from) / DAY) })),
+      pendingCancel: g.endsAt && g.endsAt > now && g.endKinds.includes('cancelled') && !cur.some((c) => c.cat === cat && !c.cancelsOn) ? iso(g.endsAt) : null,
+    };
+  }
+
+  const events = hist
+    .filter((h) => h.end && h.cat !== 'other' && within(h.end, 730, now) && kindOf(h.reason) !== 'other')
+    .sort((a, b) => b.end - a.end)
+    .slice(0, 10)
+    .map((h) => ({ date: iso(h.end), kind: kindOf(h.reason), type: h.cat === 'bipd' ? 'Liability (BIPD)' : 'Surety bond', insurer: h.insurer }));
+
+  return {
+    current: cur.map((c) => ({ type: c.type, insurer: c.insurer, coverage: c.coverage, effective: iso(c.eff), cancelsOn: iso(c.cancelsOn) })),
+    bipd: out.bipd,
+    bond: out.bond,
+    events,
+  };
+}
+
+export function buildHistory({ authLegacy = [], authMotus = [], insNowMotus = [], insNowLegacy = [], insHistMotus = [], insHistLegacy = [], errors = [], now = new Date() }) {
+  return {
+    errors,
+    authority: authorityHistory(authLegacy, authMotus, now),
+    insurance: insuranceHistory({ nowMotus: insNowMotus, nowLegacy: insNowLegacy, histMotus: insHistMotus, histLegacy: insHistLegacy }, now),
+  };
+}
+
+function historySignals(h, c, qc, now, add) {
+  const a = h.authority;
+  const ins = h.insurance;
+  const pm = (d) => { const m = monthsBetween(d, now); return m < 1 ? 'less than a month' : plural(m, 'month'); };
+
+  // Brand-new authority. Needs the legacy history, otherwise a missing record would look like "new".
+  const fg = parseDate(a.firstGranted);
+  if (fg && c.status === 'A' && !h.errors.includes('auth-legacy')) {
+    const m = monthsBetween(fg, now);
+    if (m <= 12) {
+      add('new-authority', m <= 6 ? 'medium' : 'low', `Operating authority first granted ${pm(fg)} ago`,
+        `Granted ${a.firstGranted}. Newly authorized carriers have little track record; check insurance and references.`);
+    }
+  }
+
+  const lr = parseDate(a.lastRevoked);
+  if (lr && within(lr, 1095, now)) {
+    add('authority-revoked', 'medium', `Authority revoked ${a.lastRevoked}`,
+      `FMCSA history shows a revocation of operating authority.${a.lastReinstated ? ` Most recent reinstatement on record: ${a.lastReinstated}.` : ''}`);
+  }
+
+  if (a.notices24 >= 2) {
+    add('revocation-notices', a.notices24 >= 3 ? 'medium' : 'low',
+      `${plural(a.notices24, 'involuntary revocation notice')} in the last 24 months`,
+      `FMCSA starts these when a requirement such as insurance is not met; ${a.noticesDiscontinued24} of ${a.notices24} were later discontinued.`);
+  }
+
+  // Insurance. Evaluated only for categories the carrier has filings in. There is deliberately no "no
+  // active filing" signal: the current-policy datasets are incomplete, and the live FMCSA record
+  // (insurance-short above) is the reliable source for what is on file today.
+  const labels = { bipd: 'Liability insurance', bond: 'Broker bond' };
+  for (const cat of ['bipd', 'bond']) {
+    const x = ins[cat];
+    if (!x) continue;
+    const gapDates = x.gaps.slice(0, 3).map((g) => `${g.from} to ${g.to} (${g.days} days)`).join('; ');
+    if (x.gaps.length) {
+      const longest = Math.max(...x.gaps.map((g) => g.days));
+      add(`${cat}-gap`, x.gaps.length >= 2 || longest >= 60 ? 'medium' : 'low',
+        `${labels[cat]} filings show ${plural(x.gaps.length, 'gap')} in the last 24 months`,
+        `Gaps between policies: ${gapDates}. Based on FMCSA filing dates, which can differ from actual coverage.`);
+    }
+    if (x.pendingCancel) {
+      const days = Math.round((parseDate(x.pendingCancel) - now) / DAY);
+      add(`${cat}-pending-cancel`, days <= 14 ? 'high' : 'medium',
+        `${labels[cat]} policy is set to cancel ${x.pendingCancel}`,
+        'A cancellation is on file with no replacement policy. Authority can be suspended if coverage lapses.');
+    }
+  }
+  const newest = ins.current.filter((p) => p.type === 'Liability (BIPD)' && p.effective).sort((p, q) => q.effective.localeCompare(p.effective))[0];
+  if (newest && within(parseDate(newest.effective), 60, now)) {
+    add('insurer-new', 'info', `Liability policy with ${newest.insurer || 'a new insurer'} started ${newest.effective}`,
+      'A recent policy start usually means a renewal or an insurer change.');
+  }
+}
+
 const RANK = { high: 3, medium: 2, low: 1, info: 0 };
 
 // How loudly to flag a shared attribute, based on how many others share it and how many are inactive.
@@ -132,7 +398,7 @@ function sharedSeverity(rows, cap = 'high') {
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-export function buildSignals({ carrier: c, qc, xref, now = new Date() }) {
+export function buildSignals({ carrier: c, qc, xref, history, now = new Date() }) {
   const out = [];
   const add = (id, severity, title, detail, evidence) =>
     out.push({ id, severity, title, detail, ...(evidence && evidence.length ? { evidence } : {}) });
@@ -142,14 +408,15 @@ export function buildSignals({ carrier: c, qc, xref, now = new Date() }) {
     add('census-status', 'high', `FMCSA record is ${statusLabel(c.status).toLowerCase()}`,
       'The carrier is not an active entity in the FMCSA census.');
   }
-  if (!c.dockets.length) {
+  if (!c.dockets.length && !(history && history.authority.dockets.length)) {
     add('no-docket', 'medium', 'No operating-authority docket on file',
       'No MC/MX/FF number is attached to this DOT record. It may be a private or intrastate carrier; for-hire interstate freight normally needs active authority.');
   }
   for (const d of c.dockets) {
     if (d.status && d.status !== 'A') {
+      const why = history && history.authority.dockets.find((x) => x.docket === docketKey(`${d.prefix}${d.number}`) && x.reason);
       add(`docket-${d.prefix}${d.number}`, 'high', `${d.prefix}${d.number} authority is ${statusLabel(d.status).toLowerCase()}`,
-        'Operating authority on this docket is not active.');
+        why ? `Operating authority on this docket is not active. FMCSA reason: ${why.reason}` : 'Operating authority on this docket is not active.');
     }
   }
 
@@ -237,6 +504,8 @@ export function buildSignals({ carrier: c, qc, xref, now = new Date() }) {
         'Same officer name on a different DOT number in the same state. Names can collide; treat as a lead, not a finding.', xref.officer);
     }
   }
+
+  if (history) historySignals(history, c, qc, now, add);
 
   out.sort((a, b) => RANK[b.severity] - RANK[a.severity]);
   const top = out.length ? out[0].severity : 'info';

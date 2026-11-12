@@ -4,10 +4,19 @@
 // Static UI is served from ./public by the assets binding.
 
 import {
-  clean, digits, soqlStr, fmtPhone, normalizeCarrier, brief, matchAddresses, buildSignals, statusLabel,
+  clean, digits, soqlStr, fmtPhone, normalizeCarrier, brief, matchAddresses, buildSignals, buildHistory, statusLabel,
 } from './lib.js';
 
-const CENSUS = 'https://data.transportation.gov/resource/az4n-8mr2.json';
+const SODA = 'https://data.transportation.gov/resource/';
+const CENSUS = 'az4n-8mr2';
+
+// Authority and insurance history. FMCSA moved to a new registration system (Motus) on 2026-05-14:
+// the legacy datasets are frozen at that date and the Motus ones continue from it.
+const DS = {
+  authLegacy: '9mw4-x3tu', authMotus: 'yu5v-wbh6',
+  insLegacy: 'ypjt-5ydn', insMotus: 'c5y8-a4uz',
+  histLegacy: '6sqe-dvqs', histMotus: '3uet-3z4i',
+};
 
 const BRIEF_FIELDS = [
   'dot_number', 'legal_name', 'dba_name', 'status_code', 'phy_street', 'phy_city', 'phy_state', 'phy_zip',
@@ -28,8 +37,8 @@ const json = (body, status = 200, headers = {}) =>
   });
 
 // Socrata latency is erratic, so every query gets a short timeout and one retry.
-async function soda(env, params, { timeout = 8000, retries = 1 } = {}) {
-  const url = new URL(CENSUS);
+async function soda(env, params, { timeout = 8000, retries = 1, dataset = CENSUS } = {}) {
+  const url = new URL(`${SODA}${dataset}.json`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const headers = { accept: 'application/json' };
   if (env.SOCRATA_APP_TOKEN) headers['X-App-Token'] = env.SOCRATA_APP_TOKEN;
@@ -183,6 +192,38 @@ async function crossRef(env, c) {
   };
 }
 
+// ---- Authority + insurance history ---------------------------------------
+
+async function historyData(env, c) {
+  const errors = [];
+  const safe = async (label, p) => {
+    try { return await p; } catch { errors.push(label); return []; }
+  };
+  const dot8 = String(c.dot).padStart(8, '0');
+  const dotS = String(c.dot);
+  const legacyDockets = c.dockets.filter((d) => /^[A-Z]{2}$/.test(d.prefix)).map((d) => `${d.prefix}${d.number.padStart(6, '0')}`);
+  const since = ['2024', '2025', '2026'].map((y) => `cancl_effective_date like '%/${y}'`).join(' OR ');
+  const q = (dataset, where, select, limit = '300') => soda(env, { $select: select, $where: where, $limit: limit }, { dataset });
+
+  const [authLegacy, authMotus, insNowLegacy, insNowMotus, insHistLegacy, insHistMotus] = await Promise.all([
+    safe('auth-legacy', q(DS.authLegacy, `dot_number=${soqlStr(dot8)}`,
+      'docket_number,original_action_desc,orig_served_date,disp_action_desc,disp_decided_date,disp_served_date')),
+    safe('auth', q(DS.authMotus, `usdot_number=${soqlStr(dotS)}`, 'docket_number,op_auth_type,op_auth_status,reason,status_change_date', '100')),
+    legacyDockets.length
+      ? safe('ins-legacy', q(DS.insLegacy, `prefix_docket_number in (${legacyDockets.map(soqlStr).join(',')})`,
+          'ins_type_code,ins_form_code,max_cov_amount,policy_no,effective_date,name_company', '100'))
+      : [],
+    safe('ins', q(DS.insMotus, `usdot_number=${soqlStr(dotS)}`,
+      'ins_type_code,ins_form_code,max_cov_amount,policy_no,effective_date,insurance_company_name', '100')),
+    safe('ins-hist-legacy', q(DS.histLegacy, `dot_number=${soqlStr(dot8)} AND (${since})`,
+      'ins_form_code,cancl_method,policy_no,effective_date,cancl_effective_date,name_company')),
+    safe('ins-hist', q(DS.histMotus, `usdot_number=${soqlStr(dotS)}`,
+      'ins_type_code,ins_type_desc,filing_status_reason,policy_no,effective_date,cancl_effective_date,insurance_company_name')),
+  ]);
+
+  return buildHistory({ authLegacy, authMotus, insNowLegacy, insNowMotus, insHistLegacy, insHistMotus, errors });
+}
+
 // ---- Orchestration -------------------------------------------------------
 
 async function lookup(env, rawQ, type) {
@@ -215,10 +256,10 @@ async function lookup(env, rawQ, type) {
   if (!rows.length) return { status: 404, body: { error: `No FMCSA record found for "${q}".`, searchedAs } };
 
   const carrier = normalizeCarrier(rows[0]);
-  const [xref, qc] = await Promise.all([crossRef(env, carrier), qcCarrier(env, carrier.dot)]);
-  const { signals, level } = buildSignals({ carrier, qc, xref });
+  const [xref, qc, history] = await Promise.all([crossRef(env, carrier), qcCarrier(env, carrier.dot), historyData(env, carrier)]);
+  const { signals, level } = buildSignals({ carrier, qc, xref, history });
 
-  const partial = xref.errors.length > 0 || (!qc.available && qc.reason !== 'not_configured');
+  const partial = xref.errors.length > 0 || history.errors.length > 0 || (!qc.available && qc.reason !== 'not_configured');
   return {
     status: 200,
     cacheable: !partial,
@@ -244,11 +285,13 @@ async function lookup(env, rawQ, type) {
         operation: carrier.operation || null,
       },
       signals,
+      history: { authority: history.authority, insurance: history.insurance },
       live: qc.found ? qc : null,
       meta: {
         source: 'FMCSA Company Census File (data.transportation.gov), refreshed daily from a ~24h-old database',
         liveFmcsa: qc.available ? 'ok' : qc.reason,
         crossRefErrors: xref.errors,
+        historyErrors: history.errors,
         generatedAt: new Date().toISOString(),
       },
     },
@@ -270,8 +313,10 @@ export default {
         if (!success) return json({ error: 'Too many lookups. Wait a minute and try again.' }, 429, { 'retry-after': '60' });
       }
       const cache = typeof caches !== 'undefined' ? caches.default : null;
+      // Versioned cache key: bump the number when the response shape changes.
+      const cacheKey = new Request(`${url.origin}/_c/2${url.pathname}${url.search}`);
       if (cache) {
-        const hit = await cache.match(request);
+        const hit = await cache.match(cacheKey);
         if (hit) return hit;
       }
       let r;
@@ -281,7 +326,7 @@ export default {
         return json({ error: 'FMCSA data is temporarily unavailable. Try again in a minute.' }, 502);
       }
       const res = json(r.body, r.status, r.status === 200 && r.cacheable ? { 'cache-control': 'public, max-age=300, s-maxage=3600' } : { 'cache-control': 'no-store' });
-      if (cache && r.status === 200 && r.cacheable) ctx.waitUntil(cache.put(request, res.clone()));
+      if (cache && r.status === 200 && r.cacheable) ctx.waitUntil(cache.put(cacheKey, res.clone()));
       return res;
     }
 

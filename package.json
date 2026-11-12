@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node --test tests/lib.test.js",
+    "test": "node --test tests/lib.test.js tests/history.test.js",
     "test:live": "node tests/live.mjs"
   },
   "devDependencies": {

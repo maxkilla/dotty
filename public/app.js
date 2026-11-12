@@ -45,6 +45,37 @@ function row(label, value) {
   return value == null || value === '' ? null : [h('dt', {}, label), h('dd', {}, value)];
 }
 
+function money(n) { return n == null ? '' : '$' + Number(n).toLocaleString('en-US'); }
+
+function renderHistory(hist) {
+  if (!hist) return null;
+  const a = hist.authority || {}, ins = hist.insurance || {};
+  const partial = hist.errors && hist.errors.length;
+  const cur = ins.current || [];
+  const ul = (items) => items.length ? h('ul', { class: 'ev' }, items.map((t) => h('li', {}, t))) : null;
+  const authEvents = (a.recent || []).slice(0, 8).map((e) => `${e.date} · ${e.kind}${e.docket ? ' · ' + e.docket : ''}`);
+  const insEvents = (ins.events || []).slice(0, 8).map((e) => `${e.date} · ${e.kind} · ${e.type}${e.insurer ? ' · ' + e.insurer : ''}`);
+  const dockets = (a.dockets || []).map((x) => [x.docket, x.type, x.status, x.changed ? 'since ' + x.changed : '', x.reason].filter(Boolean).join(' · '));
+  const gaps = ['bipd', 'bond'].flatMap((k) => ((ins[k] && ins[k].gaps) || []).map((g) => `${k === 'bipd' ? 'Liability' : 'Bond'} filing gap ${g.from} to ${g.to} (${g.days} days)`));
+  return h('div', { class: 'card' },
+    h('h3', {}, 'Authority and insurance history'),
+    h('dl', {},
+      row('First authority granted', a.firstGranted),
+      row('Last revocation', a.lastRevoked),
+      row('Last reinstatement', a.lastReinstated),
+      row('Revocation notices (24 mo)', a.notices24 || null)),
+    dockets.length ? [h('h4', {}, 'Dockets (new registration system)'), ul(dockets)] : null,
+    authEvents.length ? [h('h4', {}, 'Recent authority events'), ul(authEvents)] : null,
+    cur.length ? [h('h4', {}, 'Insurance filings on record'),
+      ul(cur.map((p) => [p.type, p.insurer, money(p.coverage), p.effective ? 'effective ' + p.effective : '', p.cancelsOn ? 'cancels ' + p.cancelsOn : ''].filter(Boolean).join(' · ')))] : null,
+    gaps.length ? [h('h4', {}, 'Gaps between filings'), ul(gaps)] : null,
+    insEvents.length ? [h('h4', {}, 'Recent insurance events'), ul(insEvents)] : null,
+    h('p', { class: 'fine' },
+      'Built from FMCSA licensing and insurance datasets. Dates are filing dates, not proof of actual coverage, and the current-policy data can be incomplete; the live FMCSA check above is authoritative. ',
+      'Older insurance history covers cancellations from 2024 onward. ',
+      partial ? `Some history sources failed to load (${hist.errors.join(', ')}).` : ''));
+}
+
 function renderCarrier(d) {
   const c = d.carrier;
   const [title, blurb] = LEVELS[d.level];
@@ -61,6 +92,7 @@ function renderCarrier(d) {
     h('div', { class: 'level ' + d.level }, h('b', {}, title), h('span', {}, blurb)),
     h('div', { class: 'card' },
       d.signals.length ? d.signals.map(signal) : h('p', { class: 'fine' }, 'No signals to report.')),
+    renderHistory(d.history),
     h('div', { class: 'card' },
       h('dl', {},
         row('Address', c.address),

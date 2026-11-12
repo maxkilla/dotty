@@ -35,16 +35,22 @@ Deploy: `npx wrangler secret put FMCSA_WEB_KEY` (optional), then `npm run deploy
 | Company Census File, `data.transportation.gov/resource/az4n-8mr2` | none | carrier record and all cross-referencing. Refreshed daily from a ~24h-old database |
 | QCMobile `mobile.fmcsa.dot.gov/qc/services/carriers/:dot` | `FMCSA_WEB_KEY` | optional live check: allowed-to-operate, out-of-service date, BIPD insurance, OOS rates |
 
+| Authority History (`9mw4-x3tu` legacy, `yu5v-wbh6` new) | none | first grant date, revocations, revocation notices, docket status and FMCSA reason |
+| Insur / InsHist (`ypjt-5ydn`, `c5y8-a4uz`, `6sqe-dvqs`, `3uet-3z4i`) | none | filings on record, cancelled or replaced filings, gaps, pending cancellations |
+
+FMCSA is moving from the legacy licensing system to Motus. The legacy datasets are frozen at 2026-05-14 and the Motus ones continue from there, so both are queried and merged. Formats differ (dates, docket padding, coverage in $000s vs dollars) and are normalized in `src/lib.js`.
+
 Socrata app token (`SOCRATA_APP_TOKEN`) is optional and only needed if queries get throttled.
 
 ## Signals
 
-Inactive census status or docket, no docket, stale MCS-150 (24+ months), conditional/unsatisfactory safety rating, no fleet reported, mailbox address, prior-revocation flag, phone / address / email / name shared with other DOTs (louder when the others are inactive), shared officer within the same state. With a webKey: not allowed to operate, out-of-service order, insurance below required.
+Inactive census status or docket, no docket, stale MCS-150 (24+ months), conditional/unsatisfactory safety rating, no fleet reported, mailbox address, prior-revocation flag, phone / address / email / name shared with other DOTs (louder when the others are inactive), shared officer within the same state. History signals: new authority (granted within 12 months), recent revocation (36 months), repeated revocation notices, gaps between liability or bond filings, filing set to cancel (high within 14 days), recently changed insurer. With a webKey: not allowed to operate, out-of-service order, insurance below required.
 
 ## Known limits
 
 - QCMobile response field names are coded from FMCSA's docs and are **not yet verified against a live response**. Run `FMCSA_WEB_KEY=... npm run test:live` and check the `live` block.
-- Census `add_date` is not the authority grant date, so there is no "new authority" signal yet.
+- History is built from filing dates, not actual coverage. The current-policy datasets are incomplete, so there is deliberately no "no insurance on file" signal; use the live check for that.
+- Legacy insurance history is limited to cancellations from 2024 onward. The legacy authority query is capped at 300 rows.
 - No change history (needs a database): no "contact info changed after approval", watchlists or alerts.
 - Census data lags FMCSA systems and is self-reported.
 - Responses are cached (Cache API, 1h).
