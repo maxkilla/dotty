@@ -533,3 +533,46 @@ export function buildSignals({ carrier: c, qc, xref, history, now = new Date() }
   const level = top === 'info' ? 'clear' : top;
   return { signals: out, level };
 }
+
+// ---- California DMV Motor Carrier Permit (CA number) data -------------------------------------
+// Parsed from the DMV's public "Active Motor Carriers" dashboard CSV export.
+export function parseCsv(text) {
+  const rows = [];
+  let row = [], f = '', q = false;
+  const t = String(text || '');
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) {
+      if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && t[i + 1] === '\n') i++;
+      row.push(f); f = '';
+      if (row.some((x) => x !== '')) rows.push(row);
+      row = [];
+    } else f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); if (row.some((x) => x !== '')) rows.push(row); }
+  return rows;
+}
+
+export const padCa = (s) => digits(s).slice(-7).padStart(7, '0');
+export const normName = (s) => clean(s).toUpperCase().replace(/&/g, ' AND ').replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+const dmvText = (s) => { const v = clean(s); return /^(NA|N\/A|NONE)$/i.test(v) ? '' : v; };
+
+export function parseDmvPermits(text) {
+  const rows = parseCsv(text);
+  if (!rows.length || clean(rows[0][0]) !== 'CA number') throw new Error('Unexpected DMV response');
+  const h = rows[0].map(clean);
+  const at = (r, name) => r[h.indexOf(name)];
+  return rows.slice(1).map((r) => ({
+    ca: clean(at(r, 'CA number')),
+    name: clean(at(r, 'Legal Name')),
+    dba: dmvText(at(r, 'DBA Name')),
+    phone: normPhone(at(r, 'Business phone')),
+    liabilityInsurer: dmvText(at(r, 'Liability Insurance Co')),
+    workersCompInsurer: dmvText(at(r, 'Workers Comp. Insurance Co')),
+  })).filter((p) => p.ca);
+}

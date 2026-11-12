@@ -46,6 +46,10 @@ Socrata app token (`SOCRATA_APP_TOKEN`) is optional and only needed if queries g
 
 Search by phone, email or `street, ZIP` (choose Address) to list every carrier on file with it. Phone and email are auto-detected in Auto mode. Results show up to 50 carriers.
 
+## California permits (CA numbers)
+
+Search a CA number (auto-detected as `CA 123456`, or choose "CA number"). It is looked up in the California DMV's public Active Motor Carriers dashboard (`SearchResults.csv` export, exact-match filters, one request per uncached lookup, cached 1 hour) and matched to FMCSA records by exact name or phone. Carrier pages for California carriers also check that list by exact legal name and show CA number, phone, and liability / workers' comp insurers. A missing permit never produces a signal: the match is by exact name, so absence is not proof. The DMV page terms were not reviewed; if the DMV objects or blocks requests, remove `caForCarrier` and the `ca` search type.
+
 ## Signals
 
 Inactive census status or docket, no docket, stale MCS-150 (24+ months), conditional/unsatisfactory safety rating, no fleet reported, mailbox address, prior-revocation flag, phone / address / email / name shared with other DOTs (louder when the others are inactive), shared officer within the same state. History signals: new authority (granted within 12 months), recent revocation (36 months), repeated revocation notices, gaps between liability or bond filings, filing set to cancel (high within 14 days), recently changed insurer. Possible re-registration ("chameleon"): new authority (18 months) that shares phone, address or email with inactive carriers; high when two attributes match or FMCSA flags a prior revocation, medium for one. A shared officer name alone never triggers it. With a webKey: not allowed to operate, out-of-service order, insurance below required.

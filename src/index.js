@@ -5,10 +5,13 @@
 
 import {
   clean, digits, soqlStr, fmtPhone, normPhone, splitStreet, normalizeCarrier, brief, matchAddresses, buildSignals, buildHistory, statusLabel,
+  parseDmvPermits, padCa, normName,
 } from './lib.js';
 
 const SODA = 'https://data.transportation.gov/resource/';
 const CENSUS = 'az4n-8mr2';
+const DMV_CSV = 'https://analytics.dmv.ca.gov/t/TableauProduction01/views/ActiveMCPPermitSearch/SearchResults.csv';
+const DMV_PAGE = 'https://www.dmv.ca.gov/portal/vehicle-industry-services/motor-carrier-services-mcs/motor-carrier-permits/active-motor-carriers/';
 
 // Authority and insurance history. FMCSA moved to a new registration system (Motus) on 2026-05-14:
 // the legacy datasets are frozen at that date and the Motus ones continue from it.
@@ -74,6 +77,10 @@ export function parseQuery(q, type = 'auto') {
     const n = digits(m ? m[2] : s).replace(/^0+/, '');
     return n ? { kind: 'docket', prefix, value: n } : { kind: 'bad' };
   }
+  if (type === 'ca' || (type === 'auto' && (m = s.match(/^CA[\s#:-]*(\d{1,7})$/i)))) {
+    const n = digits(m ? m[1] : s);
+    return n && n.length <= 7 ? { kind: 'ca', value: padCa(n) } : { kind: 'bad' };
+  }
   const emailRe = /^[^\s@'"]+@[^\s@'"]+\.[A-Za-z]{2,}$/;
   if (type === 'email' || (type === 'auto' && emailRe.test(s))) {
     return emailRe.test(s) ? { kind: 'email', value: s.toLowerCase() } : { kind: 'bad' };
@@ -92,6 +99,38 @@ export function parseQuery(q, type = 'auto') {
   const name = s.replace(/[^A-Za-z0-9 &.,'\/#()-]/g, ' ').replace(/-{2,}/g, '-').replace(/\s+/g, ' ').trim();
   if (name.replace(/[^A-Za-z0-9]/g, '').length >= 3) return { kind: 'name', value: name };
   return { kind: 'bad' };
+}
+
+// One filtered request to the DMV's public dashboard export. Filters are exact-match on the dashboard's
+// own field names. Rows are re-checked here because a wrong field name silently returns an unfiltered page.
+async function dmvPermits(env, field, value) {
+  const url = `${DMV_CSV}?${encodeURIComponent(field)}=${encodeURIComponent(value)}`;
+  const res = await fetch(url, {
+    headers: { accept: 'text/csv', 'user-agent': 'Dotty carrier lookup (dotty.cleverghosts.com)' },
+    signal: AbortSignal.timeout(7000),
+    cf: { cacheTtl: 3600, cacheEverything: true },
+  });
+  if (!res.ok) throw new Error(`DMV ${res.status}`);
+  const rows = parseDmvPermits(await res.text());
+  return field === 'CA number' ? rows.filter((r) => r.ca === value) : rows.filter((r) => normName(r.name) === normName(value));
+}
+
+async function caForCarrier(env, c) {
+  if (c.state !== 'CA') return null;
+  try {
+    const phones = new Set([c.phone, c.cell].filter(Boolean));
+    const permits = (await dmvPermits(env, 'Legal Name', c.legalName)).slice(0, 5)
+      .map((p) => ({ ...p, phoneMatch: p.phone ? phones.has(p.phone) : null }));
+    return { available: true, found: permits.length > 0, permits, page: DMV_PAGE };
+  } catch {
+    return { available: false, page: DMV_PAGE };
+  }
+}
+
+async function byExactName(env, name) {
+  const n = soqlStr(name.toUpperCase());
+  const rows = await soda(env, { $select: BRIEF_FIELDS, $where: `upper(legal_name)=${n} OR upper(dba_name)=${n}`, $order: 'legal_name', $limit: '25' });
+  return rows.map((r) => brief(normalizeCarrier(r)));
 }
 
 async function reverse(env, p) {
@@ -274,7 +313,38 @@ async function lookup(env, rawQ, type) {
 
   let rows = [];
   let searchedAs = p.kind;
-  if (p.kind === 'dot') rows = await byDot(env, p.value);
+  let preCa = null;
+  if (p.kind === 'ca') {
+    let permit;
+    try { [permit] = await dmvPermits(env, 'CA number', p.value); } catch {
+      return { status: 502, body: { error: 'The California DMV permit list is not responding. Try again in a minute.' } };
+    }
+    if (!permit) return { status: 404, body: { error: `No active California Motor Carrier Permit found for CA number ${p.value}. It may be inactive or expired.`, searchedAs: 'ca' } };
+    const [byPhone, byName] = await Promise.all([
+      permit.phone ? reverse(env, { kind: 'phone', value: permit.phone }).catch(() => []) : [],
+      byExactName(env, permit.name).catch(() => []),
+    ]);
+    const seen = new Map();
+    for (const m of [...byName, ...byPhone]) if (!seen.has(m.dot)) seen.set(m.dot, m);
+    const all = [...seen.values()];
+    const strong = all.filter((m) => normName(m.name) === normName(permit.name) || (m.dba && normName(m.dba) === normName(permit.name)));
+    if (strong.length === 1) {
+      rows = await byDot(env, strong[0].dot);
+      searchedAs = 'ca';
+      preCa = { available: true, found: true, permits: [{ ...permit, phoneMatch: true }], page: DMV_PAGE };
+      preCa.permits[0].phoneMatch = permit.phone ? [normalizeCarrier(rows[0] || {}).phone, normalizeCarrier(rows[0] || {}).cell].includes(permit.phone) : null;
+    } else {
+      return {
+        status: 200,
+        cacheable: true,
+        body: {
+          mode: 'list', query: q, reverse: 'ca', total: all.length, truncated: false,
+          inactive: all.filter((m) => m.status !== 'A').length, matches: all.slice(0, 50),
+          dmv: { ...permit, page: DMV_PAGE },
+        },
+      };
+    }
+  } else if (p.kind === 'dot') rows = await byDot(env, p.value);
   else if (p.kind === 'docket') rows = await byDocket(env, p.prefix, p.value);
   else if (p.kind === 'number') {
     rows = await byDot(env, p.value);
@@ -296,10 +366,12 @@ async function lookup(env, rawQ, type) {
   if (!rows.length) return { status: 404, body: { error: `No FMCSA record found for "${q}".`, searchedAs } };
 
   const carrier = normalizeCarrier(rows[0]);
-  const [xref, qc, history] = await Promise.all([crossRef(env, carrier), qcCarrier(env, carrier.dot), historyData(env, carrier)]);
+  const [xref, qc, history, ca] = await Promise.all([
+    crossRef(env, carrier), qcCarrier(env, carrier.dot), historyData(env, carrier), preCa ? preCa : caForCarrier(env, carrier),
+  ]);
   const { signals, level } = buildSignals({ carrier, qc, xref, history });
 
-  const partial = xref.errors.length > 0 || history.errors.length > 0 || (!qc.available && qc.reason !== 'not_configured');
+  const partial = xref.errors.length > 0 || history.errors.length > 0 || (!qc.available && qc.reason !== 'not_configured') || (ca && ca.available === false);
   return {
     status: 200,
     cacheable: !partial,
@@ -327,6 +399,7 @@ async function lookup(env, rawQ, type) {
       },
       signals,
       history: { authority: history.authority, insurance: history.insurance },
+      ca,
       live: qc.found ? qc : null,
       meta: {
         source: 'FMCSA Company Census File (data.transportation.gov), refreshed daily from a ~24h-old database',
@@ -355,7 +428,7 @@ export default {
       }
       const cache = typeof caches !== 'undefined' ? caches.default : null;
       // Versioned cache key: bump the number when the response shape changes.
-      const cacheKey = new Request(`${url.origin}/_c/2${url.pathname}${url.search}`);
+      const cacheKey = new Request(`${url.origin}/_c/3${url.pathname}${url.search}`);
       if (cache) {
         const hit = await cache.match(cacheKey);
         if (hit) return hit;

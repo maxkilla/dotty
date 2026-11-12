@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normPhone, splitStreet, matchAddresses, normalizeCarrier, buildSignals, parseDate, isMailbox, soqlStr } from '../src/lib.js';
 import { parseQuery } from '../src/index.js';
+import { parseCsv, parseDmvPermits, normName, padCa } from '../src/lib.js';
 
 const NOW = new Date('2026-11-12T00:00:00Z');
 const row = (o = {}) => ({
@@ -121,4 +122,29 @@ test('OOS rate signal needs volume and 1.5x the national average', () => {
   assert.ok(ids({ vehicleOosRate: 30, vehicleOosAvg: 20, vehicleInsp: 50 }).includes('oos-vehicle'));
   assert.ok(!ids({ vehicleOosRate: 30, vehicleOosAvg: 20, vehicleInsp: 5 }).includes('oos-vehicle'));
   assert.ok(!ids({ vehicleOosRate: 22, vehicleOosAvg: 20, vehicleInsp: 50 }).includes('oos-vehicle'));
+});
+
+test('CA number queries', () => {
+  assert.deepEqual(parseQuery('CA 123456'), { kind: 'ca', value: '0123456' });
+  assert.deepEqual(parseQuery('ca-25'), { kind: 'ca', value: '0000025' });
+  assert.deepEqual(parseQuery('25', 'ca'), { kind: 'ca', value: '0000025' });
+  assert.equal(parseQuery('12345678', 'ca').kind, 'bad');
+  assert.equal(parseQuery('MC1515').kind, 'docket');
+  assert.equal(padCa('(25)'), '0000025');
+});
+
+test('DMV permit CSV parsing', () => {
+  const csv = 'CA number,Legal Name,Page 1 Reset,index,Business phone,Date Eff,DBA Name,Liability Insurance Co,WDate Eff,Workers Comp. Insurance Co\r\n'
+    + '0000025,"A & S METAL, RECYCLING INC",1,3,(213) 6239443,,A AND S ENVIRONMENTAL RECOVERY,Great Divide Insurance Company,,STATE COMPENSATION INSURANCE FUND\r\n'
+    + '0000029,REPUBLIC WASTE,1,4,(747) 3199488,,NA,ACE American,,NA\r\n';
+  assert.equal(parseCsv(csv).length, 3);
+  const p = parseDmvPermits(csv);
+  assert.equal(p.length, 2);
+  assert.equal(p[0].name, 'A & S METAL, RECYCLING INC');
+  assert.equal(p[0].phone, '2136239443');
+  assert.equal(p[0].dba, 'A AND S ENVIRONMENTAL RECOVERY');
+  assert.equal(p[1].dba, '');
+  assert.equal(p[1].workersCompInsurer, '');
+  assert.throws(() => parseDmvPermits('<html>blocked</html>'));
+  assert.equal(normName('A & S Metal, Recycling Inc.'), normName('A AND S METAL RECYCLING INC'));
 });

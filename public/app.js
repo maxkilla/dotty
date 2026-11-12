@@ -99,6 +99,24 @@ function renderOwnership(c) {
     h('p', { class: 'fine' }, 'Search for: ', h('b', {}, name), '. The company may be registered in a different state than its FMCSA address. Many LLCs list only a registered agent, and a name match is a lead, not proof.'));
 }
 
+function renderCa(ca) {
+  if (!ca) return null;
+  const link = h('a', { href: ca.page, target: '_blank', rel: 'noopener noreferrer' }, 'DMV Active Motor Carriers list \u2197');
+  const permit = (p) => h('li', {}, [
+    h('b', {}, 'CA ' + p.ca), ' \xB7 ', p.name, p.dba ? ' \xB7 DBA ' + p.dba : '', p.phone ? ' \xB7 ' + p.phone : '',
+    p.phoneMatch === true ? ' (phone matches FMCSA)' : p.phoneMatch === false ? ' (phone differs from FMCSA)' : '',
+    p.liabilityInsurer ? h('div', { class: 'fine', style: 'margin:2px 0 0' }, 'Liability: ' + p.liabilityInsurer + (p.workersCompInsurer ? ' \xB7 Workers comp: ' + p.workersCompInsurer : '')) : null,
+  ]);
+  return h('div', { class: 'card' },
+    h('h3', {}, 'California Motor Carrier Permit'),
+    ca.available === false
+      ? h('p', { class: 'fine', style: 'margin-top:4px' }, 'The DMV permit list did not respond, so this was not checked. Try again, or search the ', link, '.')
+      : ca.found
+        ? [h('ul', { class: 'ev' }, ca.permits.map(permit)),
+           h('p', { class: 'fine' }, 'Matched on the exact legal name in the DMV list of active permits. A same-name match is not proof it is the same company; compare the phone and address.')]
+        : h('p', { class: 'fine', style: 'margin-top:4px' }, 'No active permit found under this exact legal name. That does not mean there is none: the DMV may list the company under a slightly different name, and out-of-state or non-property carriers may not need one. Search the ', link, ' to check.'));
+}
+
 function renderCarrier(d) {
   const c = d.carrier;
   const [title, blurb] = LEVELS[d.level];
@@ -117,6 +135,7 @@ function renderCarrier(d) {
       d.signals.length ? d.signals.map(signal) : h('p', { class: 'fine' }, 'No signals to report.')),
     renderHistory(d.history),
     renderOwnership(c),
+    renderCa(d.ca),
     h('div', { class: 'card' },
       h('dl', {},
         row('Address', c.address),
@@ -139,9 +158,13 @@ function renderCarrier(d) {
 }
 
 function renderList(d) {
-  if (!d.matches.length) return h('div', { class: 'card' }, `No carriers matched "${d.query}".`);
+  if (!d.matches.length && !d.dmv) return h('div', { class: 'card' }, `No carriers matched "${d.query}".`);
+  const dmv = d.dmv && h('p', { style: 'margin:0 0 8px' }, h('b', {}, 'CA ' + d.dmv.ca), ' \xB7 ', d.dmv.name, d.dmv.dba ? ' \xB7 DBA ' + d.dmv.dba : '', d.dmv.phone ? ' \xB7 ' + d.dmv.phone : '');
   return h('div', { class: 'card' },
-    h('p', { class: 'fine' }, d.reverse
+    dmv,
+    h('p', { class: 'fine', style: d.dmv ? 'margin-top:0' : '' }, d.reverse === 'ca'
+      ? (d.matches.length ? 'California permit found. These FMCSA records share its name or phone, pick one:' : 'California permit found, but no FMCSA record shares its name or phone.')
+      : d.reverse
       ? `${d.total > 50 ? '50+' : d.total} carrier${d.total === 1 ? '' : 's'} on file with this ${d.reverse}${d.inactive ? ` (${d.inactive} inactive)` : ''}. Pick one:`
       : `${d.matches.length}${d.matches.length === 25 ? '+' : ''} matches. Pick one:`),
     h('ul', { class: 'matches' }, d.matches.map((m) =>
