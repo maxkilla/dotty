@@ -1,5 +1,6 @@
 :root {
   --bg: #f6f5f1; --card: #fff; --ink: #1c1d1f; --muted: #6a6d73; --line: #e3e1da; --accent: #1f5f4a;
+  --node: #1f5f4a; --node-on: #fff;
   --high: #b3261e; --high-bg: #fbe9e7; --med: #8a5a00; --med-bg: #fdf1d8;
   --low: #4a5568; --low-bg: #edf0f3; --ok: #1f5f4a; --ok-bg: #e4f1ea;
   /* depth: themes override these (glow, offset print shadow, none) */
@@ -14,11 +15,21 @@
     --bg: #141513; --card: #1d1f1c; --ink: #ecebe6; --muted: #9a9d94; --line: #2e312c; --accent: #6fc3a3;
     --high: #ff8a80; --high-bg: #3a1f1c; --med: #f0c36a; --med-bg: #362c12;
     --low: #aab4c2; --low-bg: #252a30; --ok: #6fc3a3; --ok-bg: #19302a;
+    --node: #6fc3a3; --node-on: #141513;
     --sh-sm: 0 1px 2px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.3);
     --sh-md: 0 4px 12px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.4);
     --sh-lg: 0 8px 24px rgba(0,0,0,.45), 0 24px 64px rgba(0,0,0,.5);
   }
 }
+/* Node logo colours per theme (theme.js does not define --node, so these stand). */
+:root[data-theme=highway] { --node: #ffd100; --node-on: #0c3b26; }
+:root[data-theme=terminal] { --node: #ffcc33; --node-on: #0a0c08; }
+:root[data-theme=blueprint] { --node: #2aa8d8; --node-on: #fff; }
+:root[data-theme=paper] { --node: #9c1c1c; --node-on: #fbf7ec; }
+/* Low-contrast muted labels on the dark themes, fixed here (theme.js is untouched):
+   Terminal's #b07d00 and Highway's grey-green fail on dark cards. */
+html:root[data-theme=terminal] { --muted: #d9a441; }
+html:root[data-theme=highway] { --muted: #d7ecdf; }
 * { box-sizing: border-box; }
 html { scroll-padding-top: 150px; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
@@ -44,14 +55,27 @@ button.primary:disabled { opacity: .6; cursor: wait; transform: none; }
 .bar { position: sticky; top: 0; z-index: 20; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, var(--bg)), var(--bg) 65%); border-bottom: 1px solid var(--line); box-shadow: var(--sh-md); }
 .bar-in { max-width: 1080px; margin: 0 auto; padding: 16px 28px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px 24px; align-items: center; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; text-shadow: var(--tsh); }
-.brand .mark { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--bg); background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 80%, #fff), var(--accent)); box-shadow: var(--sh-sm), inset 0 1px 0 rgba(255,255,255,.4); transition: transform .3s var(--ease); }
+.brand .mark { width: 38px; height: 38px; display: grid; place-items: center; background: none; box-shadow: none; transition: transform .3s var(--ease); }
+.brand .mark svg.node-svg { width: 38px; height: 38px; }
 .brand:hover .mark { transform: rotate(-6deg) scale(1.06); }
+/* Terminal hides the brand mark in theme.js; keep the node visible there too. */
+html:root[data-theme=terminal] .brand .mark { display: grid; }
 .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
 form { display: flex; gap: 10px; min-width: 0; }
 input[type=search] { flex: 1 1 auto; min-width: 0; }
 #t { flex: 0 0 auto; max-width: 140px; }
+/* Connected-dots node logo: central dot (the carrier) linked to three smaller dots
+   (phone, address, owner). Colours come from --node / --node-on so it works in every theme. */
+.node-svg { color: var(--node); flex: none; }
+.node-svg .node-line { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
+.node-svg .node-dot { fill: var(--card); stroke: currentColor; stroke-width: 2; }
+.node-svg .node-center { fill: currentColor; }
+.node-svg .node-check { fill: none; stroke: var(--node-on); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.node-svg.sm { width: 1.1em; height: 1.1em; vertical-align: -.18em; }
+.hero-node { width: 76px; height: 76px; display: block; margin: 0 auto 16px; }
+body.has-out .hero .hero-node { display: none; }
 .themes { display: flex; gap: 8px; align-items: center; }
-.themes span { display: none; }
+.themes span { display: inline; font-size: 12px; font-weight: 600; color: var(--muted); }
 .themes button { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; box-shadow: var(--sh-sm); transition: transform .2s var(--ease); }
 .themes button:hover { transform: scale(1.18); }
 .themes button[aria-pressed=true] { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -78,6 +102,12 @@ body.pinned .strip { opacity: 1; visibility: visible; transform: none; transitio
 .strip .lv { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--low); box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 0%, transparent); }
 .strip .lv.high { background: var(--high); } .strip .lv.medium { background: var(--med); } .strip .lv.clear { background: var(--ok); }
 .strip .up { margin-left: auto; flex: none; color: var(--muted); font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+
+/* Pinned result bar: one slim bar, not a double header. The search form hides while
+   pinned (clicking the strip scrolls back to the top, where it reappears). */
+body.pinned .bar-in { padding: 8px 28px; }
+body.pinned #f { display: none; }
+body.pinned .strip { padding: 8px max(28px, calc((100% - 1080px) / 2 + 28px)); font-size: 14px; }
 
 @media (max-width: 640px) {
   .bar-in { grid-template-columns: 1fr auto; padding: 12px 16px; }
@@ -166,3 +196,32 @@ details.sec > .body > :first-child { margin-top: 0; }
 .rv .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
 .rv .reveal.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } .rv .reveal { opacity: 1; transform: none; } }
+
+.trust-note { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
+body.has-out .hero .sub, body.has-out .hero .trust, body.has-out .hero .trust-note { display: none; }
+
+/* Stepped search skeleton */
+.searching .steps { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 8px; color: var(--muted); font-size: 15px; }
+.searching .steps li::before { content: "○  "; }
+.searching .steps li.active { color: var(--ink); font-weight: 600; }
+.searching .steps li.active::before { content: "●  "; color: var(--accent); }
+.searching .steps li.done { color: var(--muted); }
+.searching .steps li.done::before { content: "✓  "; color: var(--ok); }
+.skel-bar, .skel-line { border-radius: 8px; background: linear-gradient(90deg, var(--low-bg), var(--line), var(--low-bg)); background-size: 200% 100%; animation: shimmer 1.4s infinite linear; }
+.skel-bar { height: 14px; }
+.skel-line { height: 12px; margin-top: 10px; }
+.skel-line.short { width: 60%; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.ev-more .ev { margin-top: 8px; }
+.own-line { margin-top: 20px; }
+
+/* Footer: source, snapshot and disclaimer, plus example searches. */
+.site-foot { max-width: 920px; margin: 0 auto; padding: 0 28px 56px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.site-foot p { margin: 0 0 8px; }
+.site-foot a { color: var(--accent); }
+
+@media (max-width: 640px) {
+  body.pinned .bar-in { padding: 8px 16px; }
+  body.pinned .strip { padding: 8px 16px; }
+  .hero-node { width: 60px; height: 60px; }
+}

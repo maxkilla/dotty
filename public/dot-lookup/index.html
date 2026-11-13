@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DOT Number Lookup – FMCSA carrier check | Dotty</title>
 <meta name="description" content="Free USDOT number lookup. See carrier status, authority, fleet size and cross-checks for shared phones and addresses.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/app.css">
 <script src="/theme.js"></script>
 </head>
 <body data-type="dot">
 <header class="bar"><div class="bar-in">
-  <button class="brand" id="brand" type="button" title="Start over"><span class="mark"><svg class="i"><use href="#i-shield"/></svg></span>Dotty</button>
+  <button class="brand" id="brand" type="button" title="Start over"><span class="mark"><svg class="node-svg" viewBox="0 0 48 48" aria-hidden="true"><g class="node-line"><path d="M24 24 38 11M24 24 11 36M24 24 38 37"/></g><circle class="node-dot" cx="38" cy="11" r="4.5"/><circle class="node-dot" cx="11" cy="36" r="4.5"/><circle class="node-dot" cx="38" cy="37" r="4.5"/><circle class="node-center" cx="24" cy="24" r="12"/><path class="node-check" d="M18.5 24.5 22.5 28.5 30 20"/></svg></span>Dotty</button>
   <form id="f">
     <input id="q" type="search" placeholder="USDOT number, e.g. 44110" autocomplete="off" aria-label="Carrier search" autofocus>
     <select id="t" aria-label="Search type">
@@ -30,15 +31,21 @@
   <button class="strip" id="strip" type="button" aria-label="Back to top of result"></button>
 </header>
 <section class="hero"><div class="hero-in">
+  <svg class="node-svg hero-node" viewBox="0 0 48 48" aria-hidden="true"><g class="node-line"><path d="M24 24 38 11M24 24 11 36M24 24 38 37"/></g><circle class="node-dot" cx="38" cy="11" r="4.5"/><circle class="node-dot" cx="11" cy="36" r="4.5"/><circle class="node-dot" cx="38" cy="37" r="4.5"/><circle class="node-center" cx="24" cy="24" r="12"/><path class="node-check" d="M18.5 24.5 22.5 28.5 30 20"/></svg>
   <h1>DOT number lookup</h1>
   <p class="sub">Enter a USDOT number to see the carrier record and cross-check it against the FMCSA census.</p>
-  <div class="trust"><span><svg class="i"><use href="#i-shield"/></svg>FMCSA census</span><span><svg class="i"><use href="#i-road"/></svg>CHP inspections</span><span><svg class="i"><use href="#i-doc"/></svg>California DMV permits</span></div>
+  <div class="trust"><span><svg class="node-svg sm" viewBox="0 0 48 48" aria-hidden="true"><g class="node-line"><path d="M24 24 38 11M24 24 11 36M24 24 38 37"/></g><circle class="node-dot" cx="38" cy="11" r="4.5"/><circle class="node-dot" cx="11" cy="36" r="4.5"/><circle class="node-dot" cx="38" cy="37" r="4.5"/><circle class="node-center" cx="24" cy="24" r="12"/><path class="node-check" d="M18.5 24.5 22.5 28.5 30 20"/></svg>FMCSA census</span></div>
+  <p class="trust-note">California carriers also get CHP inspection results and DMV permit checks when available.</p>
 </div></section>
 <main>
   <div id="out" aria-live="polite"></div>
 <section class="card" style="margin-top:32px"><h2>What a DOT number tells you</h2><p>A USDOT number identifies a carrier in FMCSA's registry. This lookup shows whether the record is active, which operating-authority dockets (MC, MX, FF) are attached, fleet size, the last MCS-150 update, and any safety rating.</p><h2>What gets cross-checked</h2><p>Phone numbers, addresses, emails and names are compared against other DOT records. Sharing is common among related companies, so these are leads to review, not findings of fraud.</p><h2>Where the data comes from</h2><p>The FMCSA Company Census File, refreshed daily from a database about 24 hours old. Registration data is self-reported and can lag reality.</p></section>
   <p class="fine"><a href="/">Dotty</a> · <a href="/dot-lookup/">DOT lookup</a> · <a href="/mc-number-lookup/">MC number lookup</a></p>
 </main>
+<footer class="site-foot">
+  <p>Source: FMCSA Company Census File, refreshed daily from a database about 24 hours old. Live FMCSA authority check included where available. Dotty is not affiliated with FMCSA.</p>
+  <p>Try: <a href="/?q=80806&amp;type=dot">DOT 80806 — J.B. Hunt</a> · <a href="/?q=J%20B%20HUNT&amp;type=name">J.B. Hunt by name</a> · <a href="/?q=4798200000&amp;type=phone">Phone (479) 820-0000</a></p>
+</footer>
 
 <script src="/app.js"></script>
 </body>

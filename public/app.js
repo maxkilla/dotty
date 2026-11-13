@@ -4,7 +4,6 @@ const strip = $('#strip');
 // Inline icon set (stroke icons, inherit text colour).
 const SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
-<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
 <symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
 <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/></symbol>
 <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.5v.01"/></symbol>
@@ -29,7 +28,7 @@ function ic(name) {
 }
 const SEC_ICON = { 'Signals': 'alert', 'Authority and insurance history': 'doc', 'Who owns this company?': 'users', 'California Motor Carrier Permit': 'road', 'Census record': 'truck' };
 const SEV_ICON = { high: 'alert', medium: 'alert', low: 'info', info: 'info' };
-const LEVEL_ICON = { high: 'alert', medium: 'alert', low: 'info', clear: 'shield' };
+const LEVEL_ICON = { high: 'alert', medium: 'alert', low: 'info', clear: 'info' };
 
 // Fade cards in as they scroll into view.
 const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.08 }) : null;
@@ -61,16 +60,57 @@ const LEVELS = {
 };
 const STATUS_WORD = { A: 'Active', I: 'Inactive', P: 'Pending' };
 
+// Codes shown in the census record, expanded so a bare letter is never the whole story.
+// Operation: FMCSA Company Census data dictionary (CARRIER_OPERATION: A Interstate,
+// B Intrastate hazmat, C Intrastate non-hazmat). Safety rating: S Satisfactory,
+// C Conditional, U Unsatisfactory.
+const RATING_LABEL = { S: 'Satisfactory', C: 'Conditional', U: 'Unsatisfactory' };
+const OPERATION_LABEL = { A: 'Interstate', B: 'Intrastate (hazmat)', C: 'Intrastate (non-hazmat)' };
+function fmtPct(n) { return n == null ? null : Number(n).toFixed(2) + '%'; }
+function oosText(rate, avg, insp) {
+  if (rate == null) return null;
+  let t = fmtPct(rate);
+  if (avg != null) t += ` (national avg ${fmtPct(avg)})`;
+  if (insp != null) t += ` · ${insp} inspections`;
+  return t;
+}
+function fmtChecked(iso) {
+  try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  catch { return iso; }
+}
+
+const SHARED_IDS = new Set(['shared-phone', 'shared-address', 'shared-email', 'shared-officer', 'same-name', 'shared-building']);
+// A single shared-contact signal should not, on its own, drive "Needs review" for a large,
+// active carrier: shared phones and addresses are common for related companies.
+// Display only — the API level in d.level is unchanged.
+function displayLevel(d) {
+  const base = { level: d.level, title: LEVELS[d.level][0], blurb: LEVELS[d.level][1] };
+  if (d.level !== 'high' || d.carrier.status !== 'A') return base;
+  const highs = d.signals.filter((s) => s.severity === 'high');
+  const large = (d.carrier.powerUnits || 0) >= 100 || (d.carrier.drivers || 0) >= 100;
+  const allShared = d.signals.length > 0 && d.signals.every((s) => SHARED_IDS.has(s.id));
+  if (highs.length === 1 && SHARED_IDS.has(highs[0].id) && allShared && large) {
+    return { level: 'clear', title: 'Proceed — 1 note', blurb: 'The only high-severity signal is a shared contact detail, common for related companies. Review the shared-contact signals below before approving.' };
+  }
+  return base;
+}
+
 function carrierLine(e) {
   const bits = [e.name, `DOT ${e.dot}`, e.mc, e.location, STATUS_WORD[e.status] || e.status].filter(Boolean);
   return bits.join(' · ');
 }
 
 function evidence(list) {
-  const shown = list.slice(0, 8);
-  return h('ul', { class: 'ev' },
-    shown.map((e) => h('li', {}, h('button', { class: 'link', type: 'button', onclick: () => run(String(e.dot), 'dot') }, carrierLine(e)))),
-    list.length > shown.length ? h('li', { class: 'fine' }, `and ${list.length - shown.length} more`) : null);
+  const MAX = 8;
+  const item = (e) => h('li', {}, h('button', { class: 'link', type: 'button', onclick: () => run(String(e.dot), 'dot') }, carrierLine(e)));
+  if (list.length <= MAX) return h('ul', { class: 'ev' }, list.map(item));
+  const rest = h('div', { class: 'ev-more', hidden: true }, h('ul', { class: 'ev' }, list.slice(MAX).map(item)));
+  const btn = h('button', { class: 'link', type: 'button', onclick: () => {
+    const open = rest.hidden;
+    rest.hidden = !open;
+    btn.textContent = open ? 'Show fewer carriers' : `Show all ${list.length} carriers`;
+  } }, `Show all ${list.length} carriers`);
+  return h('div', {}, h('ul', { class: 'ev' }, list.slice(0, MAX).map(item)), rest, h('p', { class: 'fine' }, btn));
 }
 
 function signal(s) {
@@ -139,10 +179,13 @@ function renderOwnership(c) {
   if (st && SOS[st]) links.push([`${st} Secretary of State business search`, SOS[st]]);
   else if (st) links.push([`${st} Secretary of State business search`, 'https://duckduckgo.com/?q=' + encodeURIComponent(`${st} secretary of state business entity search`)]);
   links.push(['OpenCorporates' + (st ? ` (${st})` : ''), `https://opencorporates.com/companies?q=${q}` + (st ? `&jurisdiction_code=us_${st.toLowerCase()}` : '')]);
-  return section('Who owns this company?', 'state registry', false,
-    h('p', { class: 'fine', style: 'margin-top:4px' }, 'FMCSA does not list owners. Search the state business registry for the legal name, then check the formation date, status, registered agent and managers.'),
-    h('ul', { class: 'ev' }, links.map(([t, u]) => h('li', {}, h('a', { href: u, target: '_blank', rel: 'noopener noreferrer' }, t + ' ', ic('ext'))))),
-    h('p', { class: 'fine' }, 'Search for: ', h('b', {}, name), '. The company may be registered in a different state than its FMCSA address. Many LLCs list only a registered agent, and a name match is a lead, not proof.'));
+  // FMCSA lists no owners, so this is a one-line pointer, not a whole section card.
+  const joined = [];
+  links.forEach(([t, u], i) => {
+    if (i) joined.push(' or ');
+    joined.push(h('a', { href: u, target: '_blank', rel: 'noopener noreferrer' }, t));
+  });
+  return h('p', { class: 'fine own-line' }, 'No owner listed in FMCSA — check ', ...joined, '. The company may be registered in a different state than its FMCSA address; a name match is a lead, not proof.');
 }
 
 function ratingChip(r) {
@@ -196,10 +239,11 @@ function renderCa(ca) {
 
 function renderCarrier(d) {
   const c = d.carrier;
-  const [title, blurb] = LEVELS[d.level];
+  const disp = displayLevel(d);
+  const title = disp.title, blurb = disp.blurb;
   const mcs = c.dockets.map((x) => x.prefix + x.number + (x.status && x.status !== 'A' ? ` (${x.statusLabel})` : ''));
   const live = d.live;
-  fillStrip(c, d.level, title);
+  fillStrip(c, disp.level, title);
   return [
     h('div', { class: 'verdict', id: 'verdict' },
     h('div', { class: 'card head' },
@@ -209,7 +253,7 @@ function renderCarrier(d) {
         h('span', { class: 'chip ' + c.status }, c.statusLabel),
         h('span', { class: 'chip' }, 'DOT ' + c.dot),
         c.dockets.map((x) => h('span', { class: 'chip ' + (x.status || '') }, x.prefix + x.number)))),
-    h('div', { class: 'level ' + d.level }, h('span', { class: 'lic' }, ic(LEVEL_ICON[d.level])), h('b', {}, title), h('span', { class: 't' }, blurb))),
+    h('div', { class: 'level ' + disp.level }, h('span', { class: 'lic' }, ic(LEVEL_ICON[disp.level])), h('b', {}, title), h('span', { class: 't' }, blurb))),
     h('div', { class: 'tools-row' }, h('button', { class: 'link', type: 'button', onclick: toggleAll }, ic('layers'), 'Expand or collapse all')),
     section('Signals', d.signals.length ? d.signals.length + (d.signals.length === 1 ? ' signal' : ' signals') : 'none', true,
       d.signals.length ? d.signals.map(signal) : h('p', { class: 'fine' }, 'No signals to report.')),
@@ -224,16 +268,18 @@ function renderCarrier(d) {
         row('Power units', c.powerUnits),
         row('Drivers', c.drivers),
         row('Last MCS-150 update', c.mcs150Date),
-        row('Safety rating', c.safetyRating ? c.safetyRating + (c.safetyRatingDate ? ` (${c.safetyRatingDate})` : '') : null),
-        row('Operation', c.operation),
+        row('Safety rating', c.safetyRating ? `${c.safetyRating} — ${RATING_LABEL[c.safetyRating] || 'Not rated'}${c.safetyRatingDate ? ` (${c.safetyRatingDate})` : ''}` : null),
+        row('Operation', c.operation ? `${c.operation} — ${OPERATION_LABEL[c.operation] || c.operation}` : null),
         live ? row('Crashes (live FMCSA)', live.crashTotal) : null,
-        live ? row('Vehicle OOS rate', live.vehicleOosRate != null ? live.vehicleOosRate + '%' : null) : null,
-        live ? row('Driver OOS rate', live.driverOosRate != null ? live.driverOosRate + '%' : null) : null)),
+        live ? row('Vehicle OOS rate', oosText(live.vehicleOosRate, live.vehicleOosAvg, live.vehicleInsp)) : null,
+        live ? row('Driver OOS rate', oosText(live.driverOosRate, live.driverOosAvg, live.driverInsp)) : null),
+      h('p', { class: 'fine' }, 'Safety rating: S Satisfactory · C Conditional · U Unsatisfactory. Operation: A Interstate · B Intrastate (hazmat) · C Intrastate (non-hazmat).')),
     h('p', { class: 'fine' },
       'Source: FMCSA Company Census File, refreshed daily from a database about 24 hours old. ',
+      d.meta && d.meta.generatedAt ? `Checked ${fmtChecked(d.meta.generatedAt)}. ` : '',
       d.meta.liveFmcsa === 'ok' ? 'Live FMCSA authority check included. ' : 'Live FMCSA authority check not included. ',
       d.meta.crossRefErrors.length ? `Some cross-checks failed (${d.meta.crossRefErrors.join(', ')}); results may be incomplete. ` : '',
-      'Registration data is self-reported and can lag reality.'),
+      'Registration data is self-reported and can lag reality. Dotty is not affiliated with FMCSA.'),
   ];
 }
 
@@ -255,18 +301,40 @@ function errCard(msg, retry, q, type) {
   return h('div', { class: 'card err' }, msg, retry ? [' ', h('button', { class: 'link', type: 'button', onclick: () => run(q, type) }, 'Retry')] : null);
 }
 
+// Stepped loading state: the lookup takes seconds (census + live FMCSA + cross-checks),
+// so show what is happening instead of a bare "Searching…".
+let searchTimer = null;
+function stopSearching() { if (searchTimer) { clearInterval(searchTimer); searchTimer = null; } }
+function searchingEl() {
+  const steps = ['Checking the FMCSA census', 'Running the live FMCSA authority check', 'Cross-checking shared phones, addresses and owners'];
+  const lis = steps.map((s, i) => h('li', { class: i === 0 ? 'active' : '' }, s));
+  const el = h('div', { class: 'card searching' },
+    h('div', { class: 'skel-bar' }),
+    h('ol', { class: 'steps' }, lis),
+    h('div', { class: 'skel-line' }), h('div', { class: 'skel-line short' }));
+  let i = 0;
+  searchTimer = setInterval(() => {
+    i += 1;
+    lis.forEach((li, k) => { li.className = k < i ? 'done' : k === i ? 'active' : ''; });
+    if (i >= steps.length) stopSearching();
+  }, 4000);
+  return el;
+}
+
 async function run(q, type) {
   $('#q').value = q;
   $('#t').value = type || 'auto';
   const go = $('#go');
   go.disabled = true;
   const out = $('#out');
-  out.replaceChildren(h('p', { class: 'fine' }, 'Searching…'));
+  stopSearching();
+  out.replaceChildren(searchingEl());
   strip.replaceChildren();
   document.body.classList.remove('pinned');
   try {
     const res = await fetch('/api/lookup?q=' + encodeURIComponent(q) + '&type=' + encodeURIComponent(type || 'auto'));
     const d = await res.json();
+    stopSearching();
     if (!res.ok) { out.replaceChildren(errCard(d.error || 'Something went wrong.', res.status >= 500, q, type)); return; }
     out.replaceChildren(...[].concat(d.stale ? h('p', { class: 'fine', style: 'margin-top:0' }, 'Live data is temporarily unavailable. Showing the last saved result, which may be out of date.') : null, d.mode === 'list' ? renderList(d) : renderCarrier(d)).filter(Boolean));
     document.body.classList.add('has-out');
@@ -276,6 +344,7 @@ async function run(q, type) {
     u.searchParams.set('type', type || 'auto');
     history.replaceState(null, '', u);
   } catch {
+    stopSearching();
     out.replaceChildren(errCard('Network error.', true, q, type));
   } finally {
     go.disabled = false;
