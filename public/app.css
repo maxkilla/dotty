@@ -83,8 +83,16 @@ body.has-out .hero .hero-node { display: none; }
 
 /* Hero: collapses once there is a result. */
 .hero { padding: 80px 28px 104px; background: radial-gradient(900px 320px at 50% -20%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 70%), linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, var(--bg)), var(--bg)); text-align: center; transition: padding .4s var(--ease); }
-.hero-in { max-width: 680px; margin: 0 auto; }
-.hero h1 { font-size: clamp(32px, 5vw, 50px); margin-bottom: 14px; transition: font-size .4s var(--ease); }
+.hero-in { max-width: 800px; margin: 0 auto; }
+.hero h1 { font-size: clamp(28px, 4vw, 42px); white-space: nowrap; margin-bottom: 14px; transition: font-size .4s var(--ease); }
+/* Keep the hero tagline on one line in every theme: Terminal/Blueprint use
+   monospace (wider per character), Highway is uppercase with tracking, Paper
+   is 44px serif in theme.js - all wider than Ledger sans. These selectors
+   beat the theme.js h1 rules on specificity. On phones, allow wrapping again. */
+html:root[data-theme=terminal] .hero h1, html:root[data-theme=blueprint] .hero h1 { font-size: clamp(24px, 3.2vw, 34px); }
+html:root[data-theme=paper] .hero h1 { font-size: clamp(28px, 4vw, 40px); }
+html:root[data-theme=highway] .hero h1 { font-size: clamp(26px, 3.6vw, 34px); letter-spacing: .02em; }
+@media (max-width: 640px) { .hero h1 { white-space: normal; font-size: clamp(26px, 7vw, 32px); } }
 .hero .sub { font-size: 18px; margin-bottom: 36px; }
 .trust { display: flex; gap: 12px 28px; justify-content: center; flex-wrap: wrap; color: var(--muted); font-size: 14px; }
 .trust span { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--sh-sm); }
