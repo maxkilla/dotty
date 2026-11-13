@@ -5,71 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DOT Number Lookup – FMCSA carrier check | Dotty</title>
 <meta name="description" content="Free USDOT number lookup. See carrier status, authority, fleet size and cross-checks for shared phones and addresses.">
-<style>
-  :root {
-    --bg: #f6f5f1; --card: #fff; --ink: #1c1d1f; --muted: #6a6d73; --line: #e3e1da; --accent: #1f5f4a;
-    --high: #b3261e; --high-bg: #fbe9e7; --med: #8a5a00; --med-bg: #fdf1d8;
-    --low: #4a5568; --low-bg: #edf0f3; --ok: #1f5f4a; --ok-bg: #e4f1ea;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #141513; --card: #1d1f1c; --ink: #ecebe6; --muted: #9a9d94; --line: #2e312c; --accent: #6fc3a3;
-      --high: #ff8a80; --high-bg: #3a1f1c; --med: #f0c36a; --med-bg: #362c12;
-      --low: #aab4c2; --low-bg: #252a30; --ok: #6fc3a3; --ok-bg: #19302a;
-    }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
-  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.02em; }
-  .sub { color: var(--muted); margin: 0 0 24px; }
-  form { display: flex; gap: 8px; flex-wrap: wrap; }
-  input, select, button { font: inherit; color: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 10px 12px; }
-  input[type=search] { flex: 1 1 240px; min-width: 0; }
-  button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; cursor: pointer; }
-  button.primary:disabled { opacity: .6; cursor: wait; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 16px; }
-  .head h2 { margin: 0; font-size: 22px; }
-  .head .dba { color: var(--muted); }
-  .ids { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; background: var(--low-bg); color: var(--low); }
-  .chip.A { background: var(--ok-bg); color: var(--ok); }
-  .chip.I { background: var(--high-bg); color: var(--high); }
-  .level { padding: 14px 16px; border-radius: 12px; margin-top: 16px; border: 1px solid transparent; }
-  .level b { display: block; font-size: 18px; }
-  .level.high { background: var(--high-bg); color: var(--high); }
-  .level.medium { background: var(--med-bg); color: var(--med); }
-  .level.low { background: var(--low-bg); color: var(--low); }
-  .level.clear { background: var(--ok-bg); color: var(--ok); }
-  .level span { color: var(--ink); opacity: .8; font-size: 14px; }
-  .sig { border-top: 1px solid var(--line); padding: 12px 0; }
-  .sig:first-child { border-top: 0; padding-top: 0; }
-  .card h4 { margin: 14px 0 4px; font-size: 13px; opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
-  .sig h3 { margin: 0; font-size: 16px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-  .sev { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px; border-radius: 6px; }
-  .sev.high { background: var(--high-bg); color: var(--high); }
-  .sev.medium { background: var(--med-bg); color: var(--med); }
-  .sev.low, .sev.info { background: var(--low-bg); color: var(--low); }
-  .sig p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
-  ul.ev { list-style: none; padding: 0; margin: 8px 0 0; }
-  ul.ev li { padding: 4px 0; font-size: 14px; }
-  button.link { background: none; border: 0; padding: 0; color: var(--accent); text-align: left; cursor: pointer; text-decoration: underline; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 15px; }
-  dt { color: var(--muted); }
-  dd { margin: 0; }
-  .fine { color: var(--muted); font-size: 13px; margin-top: 16px; }
-  .err { color: var(--high); }
-  ul.matches { list-style: none; padding: 0; margin: 0; }
-  ul.matches li { padding: 10px 0; border-top: 1px solid var(--line); }
-  ul.matches li:first-child { border-top: 0; }
-</style>
+<link rel="stylesheet" href="/app.css">
 <script src="/theme.js"></script>
 </head>
 <body data-type="dot">
-<main>
-  <h1>DOT number lookup</h1>
-  <p class="sub">Enter a USDOT number to see the carrier record and cross-check it against the FMCSA census.</p>
-
+<header class="bar"><div class="bar-in">
+  <button class="brand" id="brand" type="button" title="Start over">Dotty</button>
   <form id="f">
     <input id="q" type="search" placeholder="USDOT number, e.g. 44110" autocomplete="off" aria-label="Carrier search" autofocus>
     <select id="t" aria-label="Search type">
@@ -84,7 +25,13 @@
     </select>
     <button class="primary" id="go" type="submit">Search</button>
   </form>
-
+  <div id="tools"></div>
+</div>
+  <button class="strip" id="strip" type="button" aria-label="Back to top of result"></button>
+</header>
+<main>
+  <h1>DOT number lookup</h1>
+  <p class="sub">Enter a USDOT number to see the carrier record and cross-check it against the FMCSA census.</p>
   <div id="out" aria-live="polite"></div>
 <section class="card" style="margin-top:32px"><h2>What a DOT number tells you</h2><p>A USDOT number identifies a carrier in FMCSA's registry. This lookup shows whether the record is active, which operating-authority dockets (MC, MX, FF) are attached, fleet size, the last MCS-150 update, and any safety rating.</p><h2>What gets cross-checked</h2><p>Phone numbers, addresses, emails and names are compared against other DOT records. Sharing is common among related companies, so these are leads to review, not findings of fraud.</p><h2>Where the data comes from</h2><p>The FMCSA Company Census File, refreshed daily from a database about 24 hours old. Registration data is self-reported and can lag reality.</p></section>
   <p class="fine"><a href="/">Dotty</a> · <a href="/dot-lookup/">DOT lookup</a> · <a href="/mc-number-lookup/">MC number lookup</a></p>

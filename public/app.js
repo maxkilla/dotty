@@ -1,4 +1,5 @@
 const $ = (s) => document.querySelector(s);
+const strip = $('#strip');
 
 function h(tag, attrs, ...kids) {
   const e = document.createElement(tag);
@@ -41,6 +42,13 @@ function signal(s) {
     s.evidence ? evidence(s.evidence) : null);
 }
 
+// Collapsible result section: the title and a one-line meta stay visible, the detail folds away.
+function section(title, meta, open, ...kids) {
+  const d = h('details', { class: 'card sec' }, h('summary', {}, h('h3', {}, title), meta ? h('span', { class: 'meta' }, meta) : null), h('div', { class: 'body' }, kids));
+  if (open) d.open = true;
+  return d;
+}
+
 function row(label, value) {
   return value == null || value === '' ? null : [h('dt', {}, label), h('dd', {}, value)];
 }
@@ -57,8 +65,7 @@ function renderHistory(hist) {
   const insEvents = (ins.events || []).slice(0, 8).map((e) => `${e.date} · ${e.kind} · ${e.type}${e.insurer ? ' · ' + e.insurer : ''}`);
   const dockets = (a.dockets || []).map((x) => [x.docket, x.type, x.status, x.changed ? 'since ' + x.changed : '', x.reason].filter(Boolean).join(' · '));
   const gaps = ['bipd', 'bond'].flatMap((k) => ((ins[k] && ins[k].gaps) || []).map((g) => `${k === 'bipd' ? 'Liability' : 'Bond'} filing gap ${g.from} to ${g.to} (${g.days} days)`));
-  return h('div', { class: 'card' },
-    h('h3', {}, 'Authority and insurance history'),
+  return section('Authority and insurance history', a.firstGranted ? 'since ' + a.firstGranted : '', false,
     h('dl', {},
       row('First authority granted', a.firstGranted),
       row('Last revocation', a.lastRevoked),
@@ -92,8 +99,7 @@ function renderOwnership(c) {
   if (st && SOS[st]) links.push([`${st} Secretary of State business search`, SOS[st]]);
   else if (st) links.push([`${st} Secretary of State business search`, 'https://duckduckgo.com/?q=' + encodeURIComponent(`${st} secretary of state business entity search`)]);
   links.push(['OpenCorporates' + (st ? ` (${st})` : ''), `https://opencorporates.com/companies?q=${q}` + (st ? `&jurisdiction_code=us_${st.toLowerCase()}` : '')]);
-  return h('div', { class: 'card' },
-    h('h3', {}, 'Who owns this company?'),
+  return section('Who owns this company?', 'state registry', false,
     h('p', { class: 'fine', style: 'margin-top:4px' }, 'FMCSA does not list owners. Search the state business registry for the legal name, then check the formation date, status, registered agent and managers.'),
     h('ul', { class: 'ev' }, links.map(([t, u]) => h('li', {}, h('a', { href: u, target: '_blank', rel: 'noopener noreferrer' }, t + ' \u2197')))),
     h('p', { class: 'fine' }, 'Search for: ', h('b', {}, name), '. The company may be registered in a different state than its FMCSA address. Many LLCs list only a registered agent, and a name match is a lead, not proof.'));
@@ -137,8 +143,7 @@ function renderCa(ca) {
     p.phoneMatch === true ? ' (phone matches FMCSA)' : p.phoneMatch === false ? ' (phone differs from FMCSA)' : '',
     p.liabilityInsurer ? h('div', { class: 'fine', style: 'margin:2px 0 0' }, 'Liability: ' + p.liabilityInsurer + (p.workersCompInsurer ? ' \xB7 Workers comp: ' + p.workersCompInsurer : '')) : null,
   ]);
-  return h('div', { class: 'card' },
-    h('h3', {}, 'California Motor Carrier Permit'),
+  return section('California Motor Carrier Permit', ca.chp ? 'CA ' + ca.chp.ca : ca.found ? 'permit found' : 'not found', false,
     ca.chp ? renderChp(ca.chp, ca.chpPage) : null,
     ca.available === false
       ? h('p', { class: 'fine', style: 'margin-top:4px' }, 'The DMV permit list did not respond, so this was not checked. Try again, or search the ', link, '.')
@@ -154,7 +159,9 @@ function renderCarrier(d) {
   const [title, blurb] = LEVELS[d.level];
   const mcs = c.dockets.map((x) => x.prefix + x.number + (x.status && x.status !== 'A' ? ` (${x.statusLabel})` : ''));
   const live = d.live;
+  fillStrip(c, d.level, title);
   return [
+    h('div', { class: 'verdict', id: 'verdict' },
     h('div', { class: 'card head' },
       h('h2', {}, c.legalName),
       c.dbaName ? h('div', { class: 'dba' }, 'DBA ' + c.dbaName) : null,
@@ -162,13 +169,14 @@ function renderCarrier(d) {
         h('span', { class: 'chip ' + c.status }, c.statusLabel),
         h('span', { class: 'chip' }, 'DOT ' + c.dot),
         c.dockets.map((x) => h('span', { class: 'chip ' + (x.status || '') }, x.prefix + x.number)))),
-    h('div', { class: 'level ' + d.level }, h('b', {}, title), h('span', {}, blurb)),
-    h('div', { class: 'card' },
+    h('div', { class: 'level ' + d.level }, h('b', {}, title), h('span', {}, blurb))),
+    h('div', { class: 'tools-row' }, h('button', { class: 'link', type: 'button', onclick: toggleAll }, 'Expand or collapse all')),
+    section('Signals', d.signals.length ? d.signals.length + (d.signals.length === 1 ? ' signal' : ' signals') : 'none', true,
       d.signals.length ? d.signals.map(signal) : h('p', { class: 'fine' }, 'No signals to report.')),
     renderHistory(d.history),
     renderOwnership(c),
     renderCa(d.ca),
-    h('div', { class: 'card' },
+    section('Census record', c.powerUnits != null ? c.powerUnits + ' power units' : '', true,
       h('dl', {},
         row('Address', c.address),
         row('Phone', c.phone),
@@ -214,6 +222,8 @@ async function run(q, type) {
   go.disabled = true;
   const out = $('#out');
   out.replaceChildren(h('p', { class: 'fine' }, 'Searching…'));
+  strip.replaceChildren();
+  document.body.classList.remove('pinned');
   try {
     const res = await fetch('/api/lookup?q=' + encodeURIComponent(q) + '&type=' + encodeURIComponent(type || 'auto'));
     const d = await res.json();
@@ -239,24 +249,43 @@ $('#f').addEventListener('submit', (e) => {
 const pageType = document.body.dataset.type || 'auto';
 $('#t').value = pageType;
 
-// Clicking the title starts a clean session: clear the box, results and URL state.
+// The brand starts a clean session: clear the box, results and URL state.
 function reset() {
   $('#q').value = '';
   $('#t').value = pageType;
   $('#out').replaceChildren();
+  strip.replaceChildren();
+  document.body.classList.remove('pinned');
   const u = new URL(location.href);
   u.search = '';
   history.replaceState(null, '', u);
+  window.scrollTo(0, 0);
   $('#q').focus();
 }
-const title = document.querySelector('h1');
-if (title) {
-  title.style.cursor = 'pointer';
-  title.tabIndex = 0;
-  title.setAttribute('role', 'button');
-  title.title = 'Start over';
-  title.addEventListener('click', reset);
-  title.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reset(); } });
+$('#brand').addEventListener('click', reset);
+
+// Once the verdict scrolls out of view it condenses into the strip under the header.
+let tick = false;
+function updatePin() {
+  tick = false;
+  const v = document.getElementById('verdict');
+  if (!v) { document.body.classList.remove('pinned'); return; }
+  const bottom = v.getBoundingClientRect().bottom;
+  const on = document.body.classList.contains('pinned');
+  if (!on && bottom < 70) document.body.classList.add('pinned');
+  else if (on && bottom > 110) document.body.classList.remove('pinned');
+}
+addEventListener('scroll', () => { if (!tick) { tick = true; requestAnimationFrame(updatePin); } }, { passive: true });
+strip.addEventListener('click', () => { window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); });
+
+function fillStrip(c, level, title) {
+  strip.replaceChildren(h('span', { class: 'lv ' + level, title }), h('b', {}, c.legalName),
+    h('span', { class: 'chip ' + c.status }, c.statusLabel), h('span', { class: 'chip' }, 'DOT ' + c.dot), h('span', { class: 'up' }, 'Back to top \u2191'));
+}
+function toggleAll() {
+  const all = [...document.querySelectorAll('#out details.sec')];
+  const open = all.some((d) => !d.open);
+  all.forEach((d) => { d.open = open; });
 }
 const init = new URL(location.href).searchParams;
 if (init.get('q')) run(init.get('q'), init.get('type') || pageType);

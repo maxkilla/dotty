@@ -15,7 +15,7 @@ const files = {};
   }
 })(pub);
 
-const types = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', txt: 'text/plain; charset=utf-8' };
+const types = { css: 'text/css; charset=utf-8', html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', txt: 'text/plain; charset=utf-8' };
 const entry = `
 import app from '${path.join(root, 'src/index.js').replace(/\\/g, '/')}';
 const FILES = ${JSON.stringify(files)};

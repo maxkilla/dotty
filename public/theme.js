@@ -9,12 +9,7 @@
   ];
   var KEY = 'dotty-theme';
   var css = [
-    '.themes{display:flex;gap:10px;justify-content:flex-end;align-items:center;margin:0 0 14px}',
-    '.themes span{font-size:12px;color:var(--muted);margin-right:2px}',
-    '.themes button{width:26px;height:26px;padding:0;border-radius:50%;border:2px solid var(--line);cursor:pointer}',
-    '.themes button[aria-pressed=true]{outline:2px solid var(--ink);outline-offset:2px}',
-    '.themes button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}',
-
+    
     /* Highway: green guide sign, white border, reflective yellow */
     ':root[data-theme=highway]{color-scheme:dark;--bg:#0c3b26;--card:#0f4a30;--ink:#fff;--muted:#b6d6c4;--line:#3a7a58;--accent:#ffd100;',
     '--high:#ffb4a8;--high-bg:#5a2018;--med:#ffd666;--med-bg:#4d3a0a;--low:#d3e8dc;--low-bg:#1b5a3c;--ok:#a6f2c6;--ok-bg:#0f6a3e}',
@@ -28,9 +23,9 @@
     ':root[data-theme=terminal]{color-scheme:dark;--bg:#0a0c08;--card:#0f130b;--ink:#ffb000;--muted:#b07d00;--line:#3d2c00;--accent:#ffcc33;',
     '--high:#ff6b57;--high-bg:#2b0f0b;--med:#ffcc33;--med-bg:#2a2000;--low:#c99a2e;--low-bg:#1c1600;--ok:#8fe36a;--ok-bg:#112008}',
     '[data-theme=terminal] body,[data-theme=terminal] input,[data-theme=terminal] select,[data-theme=terminal] button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}',
-    '[data-theme=terminal] h1::before{content:"> ";color:var(--accent)}',
-    '[data-theme=terminal] h1::after{content:"_";color:var(--accent);animation:blink 1.1s steps(1) infinite}',
-    '@keyframes blink{50%{opacity:0}}@media (prefers-reduced-motion:reduce){[data-theme=terminal] h1::after{animation:none}}',
+    '[data-theme=terminal] .brand::before{content:"> ";color:var(--accent)}',
+    '[data-theme=terminal] .brand::after{content:"_";color:var(--accent);animation:blink 1.1s steps(1) infinite}',
+    '@keyframes blink{50%{opacity:0}}@media (prefers-reduced-motion:reduce){[data-theme=terminal] .brand::after{animation:none}}',
     '[data-theme=terminal] .card,[data-theme=terminal] input,[data-theme=terminal] select,[data-theme=terminal] button,[data-theme=terminal] .level,[data-theme=terminal] .chip,[data-theme=terminal] .sev{border-radius:2px}',
     '[data-theme=terminal] button.primary{color:#0a0c08}',
 
@@ -72,8 +67,8 @@
   apply(get());
 
   document.addEventListener('DOMContentLoaded', function () {
-    var main = document.querySelector('main');
-    if (!main) return;
+    var host = document.getElementById('tools');
+    if (!host) return;
     var bar = document.createElement('div');
     bar.className = 'themes';
     bar.setAttribute('role', 'group');
@@ -91,7 +86,7 @@
       b.addEventListener('click', function () { set(t.id); apply(t.id); });
       bar.appendChild(b);
     });
-    main.insertBefore(bar, main.firstChild);
+    host.appendChild(bar);
     apply(get());
   });
 })();
