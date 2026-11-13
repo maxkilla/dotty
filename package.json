@@ -11,6 +11,7 @@
     "test:live": "node tests/live.mjs"
   },
   "devDependencies": {
-    "wrangler": "^4"
+    "wrangler": "^4",
+    "esbuild": "^0.25.0"
   }
 }
