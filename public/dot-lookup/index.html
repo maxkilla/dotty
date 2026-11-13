@@ -10,7 +10,7 @@
 </head>
 <body data-type="dot">
 <header class="bar"><div class="bar-in">
-  <button class="brand" id="brand" type="button" title="Start over">Dotty</button>
+  <button class="brand" id="brand" type="button" title="Start over"><span class="mark"><svg class="i"><use href="#i-shield"/></svg></span>Dotty</button>
   <form id="f">
     <input id="q" type="search" placeholder="USDOT number, e.g. 44110" autocomplete="off" aria-label="Carrier search" autofocus>
     <select id="t" aria-label="Search type">
@@ -23,15 +23,18 @@
       <option value="address">Address</option>
       <option value="ca">CA number</option>
     </select>
-    <button class="primary" id="go" type="submit">Search</button>
+    <button class="primary" id="go" type="submit"><svg class="i"><use href="#i-search"/></svg><span>Search</span></button>
   </form>
   <div id="tools"></div>
 </div>
   <button class="strip" id="strip" type="button" aria-label="Back to top of result"></button>
 </header>
-<main>
+<section class="hero"><div class="hero-in">
   <h1>DOT number lookup</h1>
   <p class="sub">Enter a USDOT number to see the carrier record and cross-check it against the FMCSA census.</p>
+  <div class="trust"><span><svg class="i"><use href="#i-shield"/></svg>FMCSA census</span><span><svg class="i"><use href="#i-road"/></svg>CHP inspections</span><span><svg class="i"><use href="#i-doc"/></svg>California DMV permits</span></div>
+</div></section>
+<main>
   <div id="out" aria-live="polite"></div>
 <section class="card" style="margin-top:32px"><h2>What a DOT number tells you</h2><p>A USDOT number identifies a carrier in FMCSA's registry. This lookup shows whether the record is active, which operating-authority dockets (MC, MX, FF) are attached, fleet size, the last MCS-150 update, and any safety rating.</p><h2>What gets cross-checked</h2><p>Phone numbers, addresses, emails and names are compared against other DOT records. Sharing is common among related companies, so these are leads to review, not findings of fraud.</p><h2>Where the data comes from</h2><p>The FMCSA Company Census File, refreshed daily from a database about 24 hours old. Registration data is self-reported and can lag reality.</p></section>
   <p class="fine"><a href="/">Dotty</a> · <a href="/dot-lookup/">DOT lookup</a> · <a href="/mc-number-lookup/">MC number lookup</a></p>

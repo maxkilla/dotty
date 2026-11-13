@@ -10,7 +10,7 @@
 </head>
 <body data-type="mc">
 <header class="bar"><div class="bar-in">
-  <button class="brand" id="brand" type="button" title="Start over">Dotty</button>
+  <button class="brand" id="brand" type="button" title="Start over"><span class="mark"><svg class="i"><use href="#i-shield"/></svg></span>Dotty</button>
   <form id="f">
     <input id="q" type="search" placeholder="MC number, e.g. MC1515" autocomplete="off" aria-label="Carrier search" autofocus>
     <select id="t" aria-label="Search type">
@@ -23,15 +23,18 @@
       <option value="address">Address</option>
       <option value="ca">CA number</option>
     </select>
-    <button class="primary" id="go" type="submit">Search</button>
+    <button class="primary" id="go" type="submit"><svg class="i"><use href="#i-search"/></svg><span>Search</span></button>
   </form>
   <div id="tools"></div>
 </div>
   <button class="strip" id="strip" type="button" aria-label="Back to top of result"></button>
 </header>
-<main>
+<section class="hero"><div class="hero-in">
   <h1>MC number lookup</h1>
   <p class="sub">Enter an MC, MX or FF docket number to find the carrier and check its operating authority.</p>
+  <div class="trust"><span><svg class="i"><use href="#i-shield"/></svg>FMCSA census</span><span><svg class="i"><use href="#i-road"/></svg>CHP inspections</span><span><svg class="i"><use href="#i-doc"/></svg>California DMV permits</span></div>
+</div></section>
+<main>
   <div id="out" aria-live="polite"></div>
 <section class="card" style="margin-top:32px"><h2>What an MC number is</h2><p>An MC (motor carrier) number is the docket for-hire carriers hold for operating authority. This lookup finds the DOT record behind the docket and shows whether that authority is active or inactive.</p><h2>Before you approve a carrier</h2><p>Check that authority is active, the registration was updated recently, and the phone, address and email are not shared with unrelated or inactive carriers. Verify insurance and identity independently as well.</p><h2>Where the data comes from</h2><p>The FMCSA Company Census File, refreshed daily from a database about 24 hours old.</p></section>
   <p class="fine"><a href="/">Dotty</a> · <a href="/dot-lookup/">DOT lookup</a> · <a href="/mc-number-lookup/">MC number lookup</a></p>
