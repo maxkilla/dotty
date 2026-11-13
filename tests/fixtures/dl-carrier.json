@@ -1,0 +1,208 @@
+{
+ "dot_number": "365109",
+ "mc_number": "212206",
+ "legal_name": "A & S METAL RECYCLING, INC.",
+ "status": "ACTIVE",
+ "authority": {
+  "status": "ACTIVE",
+  "contract_authority_date": "1990-10-02T00:00:00Z",
+  "broker_authority": "NONE"
+ },
+ "mcs150": {
+  "date": "2024-11-08T00:00:00Z",
+  "mileage": 290931,
+  "mileage_year": 2023
+ },
+ "fleet": {
+  "power_units": 13,
+  "drivers": 6,
+  "equipment": {
+   "own_truck": 7,
+   "own_tractor": 4,
+   "term_truck": 0,
+   "term_tractor": 0,
+   "term_trailer": 0,
+   "trip_trailer": 0
+  }
+ },
+ "address": {
+  "city": "LOS ANGELES",
+  "state": "CA"
+ },
+ "risk_score": {
+  "score": 88,
+  "grade": "B",
+  "tier": "Good",
+  "confidence": "high",
+  "components": [
+   {
+    "name": "Compliance",
+    "score": 90,
+    "weight": 40
+   },
+   {
+    "name": "Safety",
+    "score": 88,
+    "weight": 35
+   },
+   {
+    "name": "Insurance",
+    "score": 85,
+    "weight": 25
+   }
+  ],
+  "flags": [
+   {
+    "severity": "warning",
+    "code": "HIGH_VEHICLE_OOS",
+    "message": "Vehicle OOS rate is 1.5\u00d7 the national average"
+   },
+   {
+    "severity": "warning",
+    "code": "NO_CARGO_INSURANCE",
+    "message": "No active cargo insurance on file"
+   }
+  ]
+ },
+ "safety_full": {
+  "inspections": {
+   "driver": {
+    "total": 35,
+    "oos": 1,
+    "oos_rate": 2.857143,
+    "national_avg": 6.275343
+   },
+   "vehicle": {
+    "total": 32,
+    "oos": 11,
+    "oos_rate": 34.375,
+    "national_avg": 22.903948
+   },
+   "hazmat": {
+    "total": 0,
+    "oos": 0,
+    "oos_rate": 0,
+    "national_avg": 2.4965334
+   },
+   "overall": {
+    "total": 43,
+    "oos": 13,
+    "oos_rate": 30.232557,
+    "national_avg": 0
+   }
+  },
+  "crashes": {
+   "fatal": 0,
+   "injury": 0,
+   "towaway": 1,
+   "total": 1,
+   "rate": 1
+  },
+  "violations": {
+   "unsafe_driving": 14,
+   "driver_fitness": 1,
+   "hos": 3,
+   "drug_alcohol": 0,
+   "vehicle_maint": 30
+  }
+ },
+ "sms_basics": {
+  "total_inspections": 41,
+  "driver_inspections": 33,
+  "driver_oos_inspections": 1,
+  "vehicle_inspections": 31,
+  "vehicle_oos_inspections": 11,
+  "unsafe_driving": {
+   "measure": 1.51,
+   "inspections_with_violations": 2
+  },
+  "hours_of_service": {
+   "measure": 0.14,
+   "inspections_with_violations": 3
+  },
+  "driver_fitness": {
+   "measure": 0.05,
+   "inspections_with_violations": 1
+  },
+  "controlled_substances": {
+   "measure": 0,
+   "inspections_with_violations": 0
+  },
+  "vehicle_maintenance": {
+   "measure": 4.64,
+   "inspections_with_violations": 14
+  }
+ },
+ "related_companies": [
+  {
+   "dot_number": "3551015",
+   "mc_number": "1202391",
+   "legal_name": "A&L- SONS TRUCKING LLC",
+   "city": "AUGUSTA",
+   "state": "GA",
+   "status": "INACTIVE",
+   "entity_type": "CARRIER",
+   "power_units": 1,
+   "drivers": 1,
+   "match_types": [
+    "officer"
+   ]
+  },
+  {
+   "dot_number": "3910385",
+   "mc_number": "1443283",
+   "legal_name": "EVERYTHANGS POSSIBLE LLC",
+   "city": "TAVARES",
+   "state": "FL",
+   "status": "INACTIVE",
+   "entity_type": "CARRIER",
+   "power_units": 1,
+   "drivers": 1,
+   "match_types": [
+    "officer"
+   ]
+  },
+  {
+   "dot_number": "4030158",
+   "mc_number": "1522379",
+   "legal_name": "HERE LOGISTICS LLC",
+   "city": "TAVARES",
+   "state": "FL",
+   "status": "ACTIVE",
+   "entity_type": "CARRIER",
+   "power_units": 1,
+   "drivers": 1,
+   "match_types": [
+    "officer"
+   ]
+  },
+  {
+   "dot_number": "3746078",
+   "mc_number": "1327943",
+   "legal_name": "RITE ON TIME TRUCKING LLC",
+   "city": "WEST PALM BCH",
+   "state": "FL",
+   "status": "INACTIVE",
+   "entity_type": "CARRIER",
+   "power_units": 1,
+   "drivers": 2,
+   "match_types": [
+    "officer"
+   ]
+  },
+  {
+   "dot_number": "3985126",
+   "mc_number": "1493336",
+   "legal_name": "SUNFIRE TRANSPORTATION LLC",
+   "city": "LAPORTE",
+   "state": "IN",
+   "status": "ACTIVE",
+   "entity_type": "CARRIER",
+   "power_units": 3,
+   "drivers": 3,
+   "match_types": [
+    "officer"
+   ]
+  }
+ ]
+}

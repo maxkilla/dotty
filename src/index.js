@@ -5,7 +5,7 @@
 
 import {
   clean, digits, soqlStr, fmtPhone, normPhone, splitStreet, normalizeCarrier, brief, matchAddresses, buildSignals, buildHistory, statusLabel,
-  parseDmvPermits, padCa, normName, parseChpSearch, parseChpTerminal, summarizeChp,
+  parseDmvPermits, padCa, normName, parseChpSearch, parseChpTerminal, summarizeChp, normalizeDl, bulkRow, parseDots,
 } from './lib.js';
 
 const SODA = 'https://data.transportation.gov/resource/';
@@ -13,6 +13,7 @@ const CENSUS = 'az4n-8mr2';
 const DMV_CSV = 'https://analytics.dmv.ca.gov/t/TableauProduction01/views/ActiveMCPPermitSearch/SearchResults.csv';
 const CHP = 'https://carriersafety.chp.ca.gov';
 const CHP_UA = { 'user-agent': 'Dotty carrier lookup (dotty.cleverghosts.com)' };
+const DL = 'https://api.dotlookup.dev/v1';
 const DMV_PAGE = 'https://www.dmv.ca.gov/portal/vehicle-industry-services/motor-carrier-services-mcs/motor-carrier-permits/active-motor-carriers/';
 
 // Authority and insurance history. FMCSA moved to a new registration system (Motus) on 2026-05-14:
@@ -254,6 +255,45 @@ async function qcCarrier(env, dot) {
   }
 }
 
+// ---- DotLookup: risk score, risk history, inspections, related carriers ----
+// Works without a key at a shared rate limit; DOTLOOKUP_KEY (optional secret) raises it and enables bulk.
+
+async function dlFetch(env, path, init = {}) {
+  const headers = { accept: 'application/json', ...(init.headers || {}) };
+  if (env.DOTLOOKUP_KEY) headers['x-api-key'] = env.DOTLOOKUP_KEY;
+  return fetch(DL + path, { ...init, headers, signal: AbortSignal.timeout(9000) });
+}
+
+async function dlCarrier(env, dot) {
+  const get = async (path) => {
+    const res = await dlFetch(env, path, { cf: { cacheTtl: 21600, cacheEverything: true } });
+    if (res.status === 404) return { notFound: true };
+    if (!res.ok) throw new Error('http_' + res.status);
+    return { json: await res.json() };
+  };
+  try {
+    const [c, h] = await Promise.all([get(`/carriers/${Number(dot)}`), get(`/carriers/${Number(dot)}/risk-history?limit=12`).catch(() => ({}))]);
+    if (c.notFound) return { available: true, found: false };
+    return normalizeDl(c.json, h.json && h.json.data) || { available: false, reason: 'bad_response' };
+  } catch (e) {
+    return { available: false, reason: 'timeout_or_network' };
+  }
+}
+
+async function bulkCheck(env, dots) {
+  const res = await dlFetch(env, '/carriers/bulk', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dot_numbers: dots }),
+  });
+  if (!res.ok) throw new Error('http_' + res.status);
+  const arr = await res.json();
+  const byDot = new Map((Array.isArray(arr) ? arr : []).map((c) => [String(Number(c.dot_number)), c]));
+  const now = new Date();
+  return {
+    rows: dots.filter((d) => byDot.has(d)).map((d) => bulkRow(byDot.get(d), now)),
+    notFound: dots.filter((d) => !byDot.has(d)),
+  };
+}
+
 // ---- Cross-reference (Census, filtered server-side by Socrata) -----------
 
 async function crossRef(env, c) {
@@ -434,12 +474,12 @@ async function lookup(env, rawQ, type) {
   if (!rows.length) return { status: 404, body: { error: `No FMCSA record found for "${q}".`, searchedAs } };
 
   const carrier = normalizeCarrier(rows[0]);
-  const [xref, qc, history, ca] = await Promise.all([
-    crossRef(env, carrier), qcCarrier(env, carrier.dot), historyData(env, carrier), preCa ? preCa : caForCarrier(env, carrier, chpRow),
+  const [xref, qc, history, ca, dl] = await Promise.all([
+    crossRef(env, carrier), qcCarrier(env, carrier.dot), historyData(env, carrier), preCa ? preCa : caForCarrier(env, carrier, chpRow), dlCarrier(env, carrier.dot),
   ]);
   const { signals, level } = buildSignals({ carrier, qc, xref, history });
 
-  const partial = xref.errors.length > 0 || history.errors.length > 0 || (!qc.available && qc.reason !== 'not_configured') || (ca && ca.available === false);
+  const partial = xref.errors.length > 0 || history.errors.length > 0 || (!qc.available && qc.reason !== 'not_configured') || (ca && ca.available === false) || dl.available === false;
   return {
     status: 200,
     cacheable: !partial,
@@ -469,9 +509,11 @@ async function lookup(env, rawQ, type) {
       history: { authority: history.authority, insurance: history.insurance },
       ca,
       live: qc.found ? qc : null,
+      dotlookup: dl.found === false ? null : dl,
       meta: {
         source: 'FMCSA Company Census File (data.transportation.gov), refreshed daily from a ~24h-old database',
         liveFmcsa: qc.available ? 'ok' : qc.reason,
+        dotlookup: dl.available ? 'ok' : dl.reason,
         crossRefErrors: xref.errors,
         historyErrors: history.errors,
         generatedAt: new Date().toISOString(),
@@ -483,9 +525,30 @@ async function lookup(env, rawQ, type) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === '/api/bulk') {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      if (!env.DOTLOOKUP_KEY) return json({ error: 'Bulk check is not set up on this site yet.' }, 501);
+      if (env.RL) {
+        const { success } = await env.RL.limit({ key: 'bulk:' + (request.headers.get('cf-connecting-ip') || 'anon') });
+        if (!success) return json({ error: 'Too many requests. Wait a minute and try again.' }, 429, { 'retry-after': '60' });
+      }
+      let body;
+      try {
+        const text = await request.text();
+        if (text.length > 20000) return json({ error: 'Too much input.' }, 413);
+        body = JSON.parse(text);
+      } catch { return json({ error: 'Send JSON like {"dots":["44110","365109"]}.' }, 400); }
+      const { dots, truncated } = parseDots(body && body.dots);
+      if (!dots.length) return json({ error: 'No valid DOT numbers found.' }, 400);
+      try {
+        const out = await bulkCheck(env, dots);
+        return json({ ...out, requested: dots.length, truncated, generatedAt: new Date().toISOString() }, 200, { 'cache-control': 'no-store' });
+      } catch { return json({ error: 'The bulk lookup is temporarily unavailable. Try again in a minute.' }, 502); }
+    }
+
     if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
 
-    if (url.pathname === '/api/health') return json({ ok: true, liveFmcsa: Boolean(env.FMCSA_WEB_KEY) });
+    if (url.pathname === '/api/health') return json({ ok: true, liveFmcsa: Boolean(env.FMCSA_WEB_KEY), bulk: Boolean(env.DOTLOOKUP_KEY) });
 
     if (url.pathname === '/api/lookup') {
       // Optional: bind a Cloudflare rate limiter as RL (see README) to enable per-IP limiting.
@@ -496,9 +559,9 @@ export default {
       }
       const cache = typeof caches !== 'undefined' ? caches.default : null;
       // Versioned cache key: bump the number when the response shape changes.
-      const cacheKey = new Request(`${url.origin}/_c/4${url.pathname}${url.search}`);
+      const cacheKey = new Request(`${url.origin}/_c/5${url.pathname}${url.search}`);
       // Long-lived copy of the last good answer, served only when a fresh lookup fails.
-      const staleKey = new Request(`${url.origin}/_s/4${url.pathname}${url.search}`);
+      const staleKey = new Request(`${url.origin}/_s/5${url.pathname}${url.search}`);
       if (cache) {
         const hit = await cache.match(cacheKey);
         if (hit) return hit;

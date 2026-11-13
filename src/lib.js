@@ -659,3 +659,77 @@ export function summarizeChp(parsed, { maxTerminals = 5, maxRows = 6 } = {}) {
     })),
   };
 }
+
+// ---- DotLookup (api.dotlookup.dev) -----------------------------------------
+
+const r1 = (n) => (typeof n === 'number' && Number.isFinite(n) ? Math.round(n * 10) / 10 : null);
+const BASIC_NAMES = {
+  unsafe_driving: 'Unsafe driving', hours_of_service: 'Hours of service', driver_fitness: 'Driver fitness',
+  controlled_substances: 'Drugs and alcohol', vehicle_maintenance: 'Vehicle maintenance',
+};
+
+// Reduce a DotLookup carrier profile (+ optional risk-history rows, newest first) to what the page shows.
+export function normalizeDl(c, hist) {
+  if (!c || typeof c !== 'object') return null;
+  const rs = c.risk_score && typeof c.risk_score.score === 'number' ? c.risk_score : null;
+  const si = (c.safety_full && c.safety_full.inspections) || {};
+  const insp = (x) => (x && x.total ? { total: x.total, oos: x.oos, rate: r1(x.oos_rate), national: x.national_avg ? r1(x.national_avg) : null } : null);
+  const cr = (c.safety_full && c.safety_full.crashes) || {};
+  const sms = c.sms_basics || {};
+  const basics = Object.keys(BASIC_NAMES)
+    .filter((k) => sms[k] && typeof sms[k].inspections_with_violations === 'number')
+    .map((k) => ({ name: BASIC_NAMES[k], measure: r1(sms[k].measure), withViolations: sms[k].inspections_with_violations }));
+  const trend = (Array.isArray(hist) ? hist : [])
+    .filter((h) => h && typeof h.score === 'number' && h.computed_at)
+    .map((h) => ({ date: String(h.computed_at).slice(0, 10), score: h.score, grade: h.grade || null }))
+    .reverse();
+  return {
+    available: true,
+    risk: rs ? {
+      score: rs.score, grade: rs.grade || null, tier: rs.tier || null, confidence: rs.confidence || null,
+      components: (rs.components || []).map((x) => ({ name: x.name, score: x.score, weight: x.weight })),
+      flags: (rs.flags || []).map((f) => ({ severity: f.severity, code: f.code, message: f.message })),
+    } : null,
+    trend,
+    inspections: { driver: insp(si.driver), vehicle: insp(si.vehicle), hazmat: insp(si.hazmat), overall: insp(si.overall) },
+    crashes: cr.total != null ? { total: cr.total, fatal: cr.fatal || 0, injury: cr.injury || 0, towaway: cr.towaway || 0 } : null,
+    basics,
+    related: (Array.isArray(c.related_companies) ? c.related_companies : []).slice(0, 8).map((x) => ({
+      dot: Number(x.dot_number), name: x.legal_name, status: x.status, location: [x.city, x.state].filter(Boolean).join(', '),
+      powerUnits: x.power_units ?? null, match: x.match_types || [],
+    })),
+    updated: trend.length ? trend[trend.length - 1].date : null,
+  };
+}
+
+// One row of the bulk screen: quick pass/flag read of a DotLookup bulk record.
+export function bulkRow(c, now = new Date()) {
+  const authStatus = clean(c.authority && c.authority.status).toUpperCase();
+  const status = clean(c.status).toUpperCase();
+  const mcs = parseDate(c.mcs150 && c.mcs150.date);
+  const months = mcs ? monthsBetween(mcs, now) : null;
+  const flags = [];
+  if (status && status !== 'ACTIVE') flags.push({ severity: 'high', text: 'Carrier is ' + status.toLowerCase() });
+  if (authStatus && authStatus !== 'ACTIVE') flags.push({ severity: 'high', text: 'Authority ' + authStatus.toLowerCase() });
+  if (months != null && months >= 24) flags.push({ severity: 'medium', text: `MCS-150 ${months} months old` });
+  if (c.fleet && c.fleet.power_units === 0) flags.push({ severity: 'medium', text: 'No power units reported' });
+  const level = flags.some((f) => f.severity === 'high') ? 'high' : flags.length ? 'medium' : 'clear';
+  return {
+    dot: Number(c.dot_number), mc: c.mc_number ? 'MC' + c.mc_number : null, name: c.legal_name || null,
+    status: status || null, authority: authStatus || null, location: [c.address && c.address.city, c.address && c.address.state].filter(Boolean).join(', '),
+    powerUnits: c.fleet ? c.fleet.power_units ?? null : null, mcs150Date: mcs ? mcs.toISOString().slice(0, 10) : null, level, flags,
+  };
+}
+
+// Parse pasted DOT numbers (commas, spaces, newlines; "DOT 123" tolerated). Returns unique, valid, capped.
+export function parseDots(input, max = 50) {
+  const list = Array.isArray(input) ? input : String(input || '').split(/[\s,;]+/);
+  const out = [];
+  for (const raw of list) {
+    const d = digits(raw);
+    if (!d || d.length > 8) continue;
+    const n = String(Number(d));
+    if (n !== '0' && !out.includes(n)) out.push(n);
+  }
+  return { dots: out.slice(0, max), truncated: out.length > max };
+}
