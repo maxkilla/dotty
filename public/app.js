@@ -1,6 +1,44 @@
 const $ = (s) => document.querySelector(s);
 const strip = $('#strip');
 
+// Inline icon set (stroke icons, inherit text colour).
+const SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.5v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></symbol>
+<symbol id="i-road" viewBox="0 0 24 24"><path d="M8 3 4 21M16 3l4 18M12 4v3M12 10.5v3M12 17v3"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 13l9 5 9-5"/></symbol>
+</defs></svg>`;
+document.body.insertAdjacentHTML('afterbegin', SPRITE);
+function ic(name) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('class', 'i');
+  s.setAttribute('aria-hidden', 'true');
+  const u = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  u.setAttribute('href', '#i-' + name);
+  s.append(u);
+  return s;
+}
+const SEC_ICON = { 'Signals': 'alert', 'Authority and insurance history': 'doc', 'Who owns this company?': 'users', 'California Motor Carrier Permit': 'road', 'Census record': 'truck' };
+const SEV_ICON = { high: 'alert', medium: 'alert', low: 'info', info: 'info' };
+const LEVEL_ICON = { high: 'alert', medium: 'alert', low: 'info', clear: 'shield' };
+
+// Fade cards in as they scroll into view.
+const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.08 }) : null;
+function armReveal() {
+  if (!io) return;
+  document.documentElement.classList.add('rv');
+  document.querySelectorAll('#out .card, #out .verdict .level').forEach((el) => { el.classList.add('reveal'); io.observe(el); });
+}
+
 function h(tag, attrs, ...kids) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -37,14 +75,16 @@ function evidence(list) {
 
 function signal(s) {
   return h('div', { class: 'sig' },
-    h('h3', {}, h('span', { class: 'sev ' + s.severity }, s.severity), s.title),
-    s.detail ? h('p', {}, s.detail) : null,
-    s.evidence ? evidence(s.evidence) : null);
+    h('span', { class: 'dot ' + s.severity }, ic(SEV_ICON[s.severity] || 'info')),
+    h('div', {},
+      h('h3', {}, h('span', { class: 'sev ' + s.severity }, s.severity), s.title),
+      s.detail ? h('p', {}, s.detail) : null,
+      s.evidence ? evidence(s.evidence) : null));
 }
 
 // Collapsible result section: the title and a one-line meta stay visible, the detail folds away.
 function section(title, meta, open, ...kids) {
-  const d = h('details', { class: 'card sec' }, h('summary', {}, h('h3', {}, title), meta ? h('span', { class: 'meta' }, meta) : null), h('div', { class: 'body' }, kids));
+  const d = h('details', { class: 'card sec' }, h('summary', {}, h('span', { class: 'sic' }, ic(SEC_ICON[title] || 'layers')), h('h3', {}, title), meta ? h('span', { class: 'meta' }, meta) : null), h('div', { class: 'body' }, kids));
   if (open) d.open = true;
   return d;
 }
@@ -101,7 +141,7 @@ function renderOwnership(c) {
   links.push(['OpenCorporates' + (st ? ` (${st})` : ''), `https://opencorporates.com/companies?q=${q}` + (st ? `&jurisdiction_code=us_${st.toLowerCase()}` : '')]);
   return section('Who owns this company?', 'state registry', false,
     h('p', { class: 'fine', style: 'margin-top:4px' }, 'FMCSA does not list owners. Search the state business registry for the legal name, then check the formation date, status, registered agent and managers.'),
-    h('ul', { class: 'ev' }, links.map(([t, u]) => h('li', {}, h('a', { href: u, target: '_blank', rel: 'noopener noreferrer' }, t + ' \u2197')))),
+    h('ul', { class: 'ev' }, links.map(([t, u]) => h('li', {}, h('a', { href: u, target: '_blank', rel: 'noopener noreferrer' }, t + ' ', ic('ext'))))),
     h('p', { class: 'fine' }, 'Search for: ', h('b', {}, name), '. The company may be registered in a different state than its FMCSA address. Many LLCs list only a registered agent, and a name match is a lead, not proof.'));
 }
 
@@ -112,7 +152,7 @@ function ratingChip(r) {
 
 function renderChp(chp, page) {
   const i = chp.inspections;
-  const link = h('a', { href: page, target: '_blank', rel: 'noopener noreferrer' }, 'CHP Carrier Inspection Results \u2197');
+  const link = h('a', { href: page, target: '_blank', rel: 'noopener noreferrer' }, ['CHP Carrier Inspection Results ', ic('ext')]);
   const ids = [
     h('b', {}, 'CA ' + chp.ca), chp.status ? ' \xB7 ' + chp.status : '',
     chp.calT ? ' \xB7 Cal-T ' + chp.calT : '', chp.psc ? ' \xB7 PSC ' + chp.psc : '',
@@ -137,7 +177,7 @@ function renderChp(chp, page) {
 
 function renderCa(ca) {
   if (!ca) return null;
-  const link = h('a', { href: ca.page, target: '_blank', rel: 'noopener noreferrer' }, 'DMV Active Motor Carriers list \u2197');
+  const link = h('a', { href: ca.page, target: '_blank', rel: 'noopener noreferrer' }, ['DMV Active Motor Carriers list ', ic('ext')]);
   const permit = (p) => h('li', {}, [
     h('b', {}, 'CA ' + p.ca), ' \xB7 ', p.name, p.dba ? ' \xB7 DBA ' + p.dba : '', p.phone ? ' \xB7 ' + p.phone : '',
     p.phoneMatch === true ? ' (phone matches FMCSA)' : p.phoneMatch === false ? ' (phone differs from FMCSA)' : '',
@@ -169,8 +209,8 @@ function renderCarrier(d) {
         h('span', { class: 'chip ' + c.status }, c.statusLabel),
         h('span', { class: 'chip' }, 'DOT ' + c.dot),
         c.dockets.map((x) => h('span', { class: 'chip ' + (x.status || '') }, x.prefix + x.number)))),
-    h('div', { class: 'level ' + d.level }, h('b', {}, title), h('span', {}, blurb))),
-    h('div', { class: 'tools-row' }, h('button', { class: 'link', type: 'button', onclick: toggleAll }, 'Expand or collapse all')),
+    h('div', { class: 'level ' + d.level }, h('span', { class: 'lic' }, ic(LEVEL_ICON[d.level])), h('b', {}, title), h('span', { class: 't' }, blurb))),
+    h('div', { class: 'tools-row' }, h('button', { class: 'link', type: 'button', onclick: toggleAll }, ic('layers'), 'Expand or collapse all')),
     section('Signals', d.signals.length ? d.signals.length + (d.signals.length === 1 ? ' signal' : ' signals') : 'none', true,
       d.signals.length ? d.signals.map(signal) : h('p', { class: 'fine' }, 'No signals to report.')),
     renderHistory(d.history),
@@ -229,6 +269,8 @@ async function run(q, type) {
     const d = await res.json();
     if (!res.ok) { out.replaceChildren(errCard(d.error || 'Something went wrong.', res.status >= 500, q, type)); return; }
     out.replaceChildren(...[].concat(d.stale ? h('p', { class: 'fine', style: 'margin-top:0' }, 'Live data is temporarily unavailable. Showing the last saved result, which may be out of date.') : null, d.mode === 'list' ? renderList(d) : renderCarrier(d)).filter(Boolean));
+    document.body.classList.add('has-out');
+    armReveal();
     const u = new URL(location.href);
     u.searchParams.set('q', q);
     u.searchParams.set('type', type || 'auto');
@@ -255,7 +297,7 @@ function reset() {
   $('#t').value = pageType;
   $('#out').replaceChildren();
   strip.replaceChildren();
-  document.body.classList.remove('pinned');
+  document.body.classList.remove('pinned', 'has-out');
   const u = new URL(location.href);
   u.search = '';
   history.replaceState(null, '', u);
@@ -280,7 +322,7 @@ strip.addEventListener('click', () => { window.scrollTo({ top: 0, behavior: matc
 
 function fillStrip(c, level, title) {
   strip.replaceChildren(h('span', { class: 'lv ' + level, title }), h('b', {}, c.legalName),
-    h('span', { class: 'chip ' + c.status }, c.statusLabel), h('span', { class: 'chip' }, 'DOT ' + c.dot), h('span', { class: 'up' }, 'Back to top \u2191'));
+    h('span', { class: 'chip ' + c.status }, c.statusLabel), h('span', { class: 'chip' }, 'DOT ' + c.dot), h('span', { class: 'up' }, 'Back to top', ic('up')));
 }
 function toggleAll() {
   const all = [...document.querySelectorAll('#out details.sec')];
