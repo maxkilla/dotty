@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulk carrier check – Dotty</title>
+<meta name="description" content="Paste up to 50 DOT numbers and screen them at once: active status, operating authority and stale registrations.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/app.css">
+<script src="/theme.js"></script>
+</head>
+<body>
+<header class="bar"><div class="bar-in">
+  <a class="brand" href="/" title="Dotty home"><span class="mark"><svg class="node-svg" viewBox="0 0 48 48" aria-hidden="true"><g class="node-line"><path d="M24 24 38 11M24 24 11 36M24 24 38 37"/></g><circle class="node-dot" cx="38" cy="11" r="4.5"/><circle class="node-dot" cx="11" cy="36" r="4.5"/><circle class="node-dot" cx="38" cy="37" r="4.5"/><circle class="node-center" cx="24" cy="24" r="12"/><path class="node-check" d="M18.5 24.5 22.5 28.5 30 20"/></svg></span>Dotty</a>
+  <span></span>
+  <div id="tools"></div>
+</div></header>
+<section class="hero"><div class="hero-in">
+  <h1>Check many carriers at once.</h1>
+  <p class="sub">Paste up to 50 DOT numbers from a rate confirmation or carrier list. Each is screened for active status, operating authority and a stale registration.</p>
+</div></section>
+<main>
+  <div class="card bulk-box">
+    <label for="dots" class="fine" style="margin:0">DOT numbers, separated by commas, spaces or new lines</label>
+    <textarea id="dots" placeholder="44110&#10;365109&#10;80806" spellcheck="false"></textarea>
+    <div class="bulk-actions"><button class="primary" id="run" type="button"><svg class="i"><use href="#i-search"/></svg><span>Check carriers</span></button><span class="fine" id="msg" style="margin:0"></span></div>
+  </div>
+  <div id="res" aria-live="polite"></div>
+  <p class="fine"><a href="/">Back to single lookup</a>. This is a quick screen from DotLookup's data, not the full cross-check: open any carrier for signals, insurance history and California checks.</p>
+</main>
+<script src="/bulk/bulk.js"></script>
+</body>
+</html>

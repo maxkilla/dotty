@@ -4,6 +4,7 @@ const strip = $('#strip');
 // Inline icon set (stroke icons, inherit text colour).
 const SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6M7 18h.01M17 18h.01M12 8v.01"/></symbol>
 <symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
 <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/></symbol>
 <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.5v.01"/></symbol>
@@ -26,7 +27,7 @@ function ic(name) {
   s.append(u);
   return s;
 }
-const SEC_ICON = { 'Signals': 'alert', 'Authority and insurance history': 'doc', 'Who owns this company?': 'users', 'California Motor Carrier Permit': 'road', 'Census record': 'truck' };
+const SEC_ICON = { 'Signals': 'alert', 'Authority and insurance history': 'doc', 'Who owns this company?': 'users', 'California Motor Carrier Permit': 'road', 'Census record': 'truck', 'DotLookup risk check': 'gauge' };
 const SEV_ICON = { high: 'alert', medium: 'alert', low: 'info', info: 'info' };
 const LEVEL_ICON = { high: 'alert', medium: 'alert', low: 'info', clear: 'info' };
 
@@ -237,6 +238,60 @@ function renderCa(ca) {
         : h('p', { class: 'fine', style: 'margin-top:4px' }, (ca.chpDown ? 'The CHP inspection site did not respond. ' : 'Not found in the CHP inspection records. ') + 'No active permit found under this exact legal name. That does not mean there is none: the DMV may list the company under a slightly different name, and out-of-state or non-property carriers may not need one. Search the ', link, ' to check.'));
 }
 
+// ---- DotLookup risk check ----------------------------------------------------
+const GRADE_CLASS = { A: 'ok', B: 'ok', C: 'med', D: 'high', F: 'high' };
+function svgEl(tag, attrs) {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+function sparkline(trend) {
+  if (trend.length < 2) return null;
+  const W = 280, H = 64, P = 8;
+  const sc = trend.map((t) => t.score);
+  const lo = Math.min(...sc), span = Math.max(Math.max(...sc) - lo, 10);
+  const pts = trend.map((t, i) => [P + (i * (W - 2 * P)) / (trend.length - 1), H - P - ((t.score - lo) / span) * (H - 2 * P)]);
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, class: 'spark', role: 'img', 'aria-label': `Risk score over time: ${sc.join(', ')}` });
+  svg.append(svgEl('polyline', { points: pts.map((p) => p.join(',')).join(' '), fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  pts.forEach((p, i) => svg.append(svgEl('circle', { cx: p[0], cy: p[1], r: i === pts.length - 1 ? 4.5 : 3, fill: i === pts.length - 1 ? 'currentColor' : 'var(--card)', stroke: 'currentColor', 'stroke-width': 2 })));
+  return svg;
+}
+function pctLine(x, label) {
+  if (!x) return null;
+  return row(label, `${x.rate}%` + (x.national != null ? ` (national ${x.national}%)` : '') + ` \u00b7 ${x.oos} of ${x.total} inspections`);
+}
+function renderDl(dl) {
+  if (!dl || !dl.available) return null;
+  const r = dl.risk;
+  const first = dl.trend[0], last = dl.trend[dl.trend.length - 1];
+  const delta = dl.trend.length > 1 ? last.score - first.score : null;
+  const dlNote = r ? [
+    h('div', { class: 'dl-top' },
+      h('div', { class: 'dl-grade ' + (GRADE_CLASS[r.grade] || 'low') }, r.grade || '?'),
+      h('div', {}, h('b', {}, `Score ${r.score} of 100${r.tier ? ' \u00b7 ' + r.tier : ''}`),
+        h('div', { class: 'fine', style: 'margin:2px 0 0' }, `${r.confidence ? 'Confidence: ' + r.confidence + '. ' : ''}DotLookup's own model, not an FMCSA rating.`))),
+    r.components.length ? h('div', { class: 'dl-comps' }, r.components.map((c) => h('div', { class: 'dl-comp' },
+      h('span', {}, c.name), h('div', { class: 'dl-bar' }, h('i', { style: `width:${Math.max(0, Math.min(100, c.score))}%` })), h('span', { class: 'dl-num' }, String(c.score)), h('span', { class: 'fine dl-w' }, `weight ${c.weight}%`)))) : null,
+    dl.trend.length > 1 ? h('div', { class: 'dl-trend' }, sparkline(dl.trend),
+      h('div', { class: 'fine', style: 'margin:0' }, `${first.date} to ${last.date}: ${first.score} \u2192 ${last.score}`,
+        delta ? h('b', { class: delta < 0 ? 'dn' : 'up' }, ` (${delta > 0 ? '+' : '\u2212'}${Math.abs(delta)})`) : null)) : null,
+    r.flags.length ? h('ul', { class: 'dl-flags' }, r.flags.map((f) => h('li', { class: f.severity }, ic(f.severity === 'critical' || f.severity === 'high' ? 'alert' : 'info'), f.message))) : null,
+  ] : h('p', { class: 'fine', style: 'margin-top:0' }, 'DotLookup has no risk score for this carrier yet.');
+  const i = dl.inspections, cr = dl.crashes;
+  const hasSafety = i.driver || i.vehicle || i.hazmat || cr;
+  return section('DotLookup risk check', r ? `${r.grade} \u00b7 ${r.score}/100` : '', true,
+    dlNote,
+    hasSafety ? [h('h4', {}, 'Roadside inspections (out-of-service rate)'), h('dl', {},
+      pctLine(i.vehicle, 'Vehicle'), pctLine(i.driver, 'Driver'), pctLine(i.hazmat, 'Hazmat'),
+      cr ? row('Crashes', `${cr.total} (${cr.fatal} fatal, ${cr.injury} injury, ${cr.towaway} tow-away)`) : null)] : null,
+    dl.basics.length ? [h('h4', {}, 'Inspections with violations, by category'), h('ul', { class: 'ev' },
+      dl.basics.map((b) => h('li', {}, `${b.name}: ${b.withViolations}`, b.measure != null ? h('span', { class: 'fine', style: 'margin:0' }, ` \u00b7 measure ${b.measure}`) : null)))] : null,
+    dl.related.length ? [h('h4', {}, 'Related carriers found by DotLookup'), evidence(dl.related.map((x) => ({
+      dot: x.dot, name: x.name + (x.match.length ? ` (same ${x.match.join(' and ')})` : ''), location: x.location, status: x.status ? x.status.charAt(0) + x.status.slice(1).toLowerCase() : '' })))] : null,
+    h('p', { class: 'fine' }, 'Data from ', h('a', { href: 'https://dotlookup.dev', target: '_blank', rel: 'noopener noreferrer' }, 'DotLookup'),
+      dl.updated ? `, scored ${dl.updated}` : '', '. Scores and flags are leads to review, not findings.'));
+}
+
 function renderCarrier(d) {
   const c = d.carrier;
   const disp = displayLevel(d);
@@ -257,6 +312,7 @@ function renderCarrier(d) {
     h('div', { class: 'tools-row' }, h('button', { class: 'link', type: 'button', onclick: toggleAll }, ic('layers'), 'Expand or collapse all')),
     section('Signals', d.signals.length ? d.signals.length + (d.signals.length === 1 ? ' signal' : ' signals') : 'none', true,
       d.signals.length ? d.signals.map(signal) : h('p', { class: 'fine' }, 'No signals to report.')),
+    renderDl(d.dotlookup),
     renderHistory(d.history),
     renderOwnership(c),
     renderCa(d.ca),
@@ -400,3 +456,6 @@ function toggleAll() {
 }
 const init = new URL(location.href).searchParams;
 if (init.get('q')) run(init.get('q'), init.get('type') || pageType);
+
+// Bulk check link appears only when the Worker has a DotLookup key.
+fetch('/api/health').then((r) => r.json()).then((j) => { const a = document.getElementById('bulk-link'); if (j && j.bulk && a) a.hidden = false; }).catch(() => {});
