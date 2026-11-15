@@ -76,6 +76,8 @@ input[type=search] { flex: 1 1 auto; min-width: 0; }
 .hero-node { width: 64px; height: 64px; display: block; margin: 0 0 12px; }
 body.has-out .hero .hero-node { display: none; }
 .site-foot #tools { margin-top: 24px; }
+.site-foot .themes span { font-size: 14px; }
+.site-foot .themes button { width: 16px; height: 16px; }
 .themes { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
 .themes span { display: inline; font-size: 12px; font-weight: 600; color: var(--muted); }
 .themes button { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; box-shadow: var(--sh-sm); transition: transform .2s var(--ease); }
