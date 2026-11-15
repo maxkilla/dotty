@@ -354,7 +354,7 @@ function renderList(d) {
 }
 
 function errCard(msg, retry, q, type) {
-  return h('div', { class: 'card err' }, msg, retry ? [' ', h('button', { class: 'link', type: 'button', onclick: () => run(q, type) }, 'Retry')] : null);
+  return h('div', { class: 'card err' }, msg, retry ? [' ', h('button', { class: 'link', type: 'button', onclick: () => run(q, type) }, 'Retry'), ' \u00b7 ', h('button', { class: 'link', type: 'button', onclick: () => run('80806', 'dot') }, 'Try DOT 80806')] : null);
 }
 
 // Stepped loading state: the lookup takes seconds (census + live FMCSA + cross-checks),
@@ -391,7 +391,7 @@ async function run(q, type) {
     const res = await fetch('/api/lookup?q=' + encodeURIComponent(q) + '&type=' + encodeURIComponent(type || 'auto'));
     const d = await res.json();
     stopSearching();
-    if (!res.ok) { out.replaceChildren(errCard(d.error || 'Something went wrong.', res.status >= 500, q, type)); return; }
+    if (!res.ok) { out.replaceChildren(errCard(d.error || "The FMCSA lookup didn't return a result \u2014 the census check may be down. Try again, or try a DOT number directly.", true, q, type)); return; }
     out.replaceChildren(...[].concat(d.stale ? h('p', { class: 'fine', style: 'margin-top:0' }, 'Live data is temporarily unavailable. Showing the last saved result, which may be out of date.') : null, d.mode === 'list' ? renderList(d) : renderCarrier(d)).filter(Boolean));
     document.body.classList.add('has-out');
     armReveal();
@@ -401,7 +401,7 @@ async function run(q, type) {
     history.replaceState(null, '', u);
   } catch {
     stopSearching();
-    out.replaceChildren(errCard('Network error.', true, q, type));
+    out.replaceChildren(errCard("Couldn't reach Dotty \u2014 check your connection and retry.", true, q, type));
   } finally {
     go.disabled = false;
   }
@@ -415,6 +415,10 @@ $('#f').addEventListener('submit', (e) => {
 
 const pageType = document.body.dataset.type || 'auto';
 $('#t').value = pageType;
+
+// Focus the search box on load only where there is a real keyboard: on touch
+// devices autofocus pops the keyboard and zooms before the user asked.
+if (matchMedia('(pointer: fine)').matches) $('#q').focus();
 
 // The brand starts a clean session: clear the box, results and URL state.
 function reset() {
