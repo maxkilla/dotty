@@ -144,7 +144,7 @@ function renderHistory(hist) {
   const insEvents = (ins.events || []).slice(0, 8).map((e) => `${e.date} · ${e.kind} · ${e.type}${e.insurer ? ' · ' + e.insurer : ''}`);
   const dockets = (a.dockets || []).map((x) => [x.docket, x.type, x.status, x.changed ? 'since ' + x.changed : '', x.reason].filter(Boolean).join(' · '));
   const gaps = ['bipd', 'bond'].flatMap((k) => ((ins[k] && ins[k].gaps) || []).map((g) => `${k === 'bipd' ? 'Liability' : 'Bond'} filing gap ${g.from} to ${g.to} (${g.days} days)`));
-  return section('Authority and insurance history', a.firstGranted ? 'since ' + a.firstGranted : '', false,
+  return section('Authority and insurance history', a.firstGranted ? 'since ' + a.firstGranted : '', true,
     h('dl', {},
       row('First authority granted', a.firstGranted),
       row('Last revocation', a.lastRevoked),
