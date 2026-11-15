@@ -15,6 +15,12 @@ function h(tag, attrs, ...kids) {
 
 const btn = $('#run'), msg = $('#msg'), res = $('#res');
 
+// Error messages name the cause and offer a Retry, like the single-lookup
+// page — never a bare "Something went wrong."
+function showErr(text) {
+  msg.replaceChildren(text, ' ', h('button', { class: 'link', type: 'button', onclick: () => btn.click() }, 'Retry'));
+}
+
 fetch('/api/health').then((r) => r.json()).then((j) => {
   if (!j.bulk) { btn.disabled = true; msg.textContent = 'Bulk check is not set up on this site yet.'; }
 }).catch(() => {});
@@ -54,9 +60,9 @@ btn.addEventListener('click', async () => {
   try {
     const r = await fetch('/api/bulk', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dots }) });
     const d = await r.json();
-    if (!r.ok) { msg.textContent = d.error || 'Something went wrong.'; return; }
+    if (!r.ok) { showErr(d.error || "The bulk check didn't return a result — the census check may be down. Try again, or check carriers one at a time."); return; }
     msg.textContent = '';
     render(d);
-  } catch { msg.textContent = 'Network error. Try again.'; }
+  } catch { showErr("Couldn't reach Dotty — check your connection and retry."); }
   finally { btn.disabled = false; }
 });
