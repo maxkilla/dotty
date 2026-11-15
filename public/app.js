@@ -304,8 +304,8 @@ function renderCarrier(d) {
       c.dbaName ? h('div', { class: 'dba' }, 'DBA ' + c.dbaName) : null,
       h('div', { class: 'ids' },
         h('span', { class: 'chip ' + c.status }, c.statusLabel),
-        h('span', { class: 'chip' }, 'DOT ' + c.dot),
-        c.dockets.map((x) => h('span', { class: 'chip ' + (x.status || '') }, x.prefix + x.number)))),
+        h('span', { class: 'chip num' }, 'DOT ' + c.dot),
+        c.dockets.map((x) => h('span', { class: 'chip num ' + (x.status || '') }, x.prefix + x.number)))),
     h('div', { class: 'level ' + disp.level }, h('span', { class: 'lic' }, ic(LEVEL_ICON[disp.level])), h('b', {}, title), h('span', { class: 't' }, blurb))),
     h('div', { class: 'tools-row' }, h('button', { class: 'link', type: 'button', onclick: toggleAll }, ic('layers'), 'Expand or collapse all')),
     section('Signals', d.signals.length ? d.signals.length + (d.signals.length === 1 ? ' signal' : ' signals') : 'none', true,
@@ -418,6 +418,15 @@ $('#t').value = pageType;
 // devices autofocus pops the keyboard and zooms before the user asked.
 if (matchMedia('(pointer: fine)').matches) $('#q').focus();
 
+// On phones the long placeholder crowds the search box: shorten it there.
+// Only the main search has the long placeholder; the DOT/MC pages are short already.
+if ($('#q').placeholder.indexOf('DOT, MC, name') === 0) {
+  const fullPh = $('#q').placeholder;
+  const fitPlaceholder = () => { $('#q').placeholder = matchMedia('(max-width: 640px)').matches ? 'DOT, MC, or name' : fullPh; };
+  fitPlaceholder();
+  matchMedia('(max-width: 640px)').addEventListener('change', fitPlaceholder);
+}
+
 // The brand starts a clean session: clear the box, results and URL state.
 function reset() {
   $('#q').value = '';
@@ -449,7 +458,7 @@ strip.addEventListener('click', () => { window.scrollTo({ top: 0, behavior: matc
 
 function fillStrip(c, level, title) {
   strip.replaceChildren(h('span', { class: 'lv ' + level, title }), h('b', {}, c.legalName),
-    h('span', { class: 'chip ' + c.status }, c.statusLabel), h('span', { class: 'chip' }, 'DOT ' + c.dot), h('span', { class: 'up' }, 'Back to top', ic('up')));
+    h('span', { class: 'chip ' + c.status }, c.statusLabel), h('span', { class: 'chip num' }, 'DOT ' + c.dot), h('span', { class: 'up' }, 'Back to top', ic('up')));
 }
 function toggleAll() {
   const all = [...document.querySelectorAll('#out details.sec')];
