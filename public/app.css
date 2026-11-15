@@ -75,7 +75,8 @@ input[type=search] { flex: 1 1 auto; min-width: 0; }
 .node-svg.sm { width: 1.1em; height: 1.1em; vertical-align: -.18em; }
 .hero-node { width: 64px; height: 64px; display: block; margin: 0 0 12px; }
 body.has-out .hero .hero-node { display: none; }
-.themes { display: flex; gap: 8px; align-items: center; }
+#tools { grid-column: 3; justify-self: end; min-width: 0; }
+.themes { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
 .themes span { display: inline; font-size: 12px; font-weight: 600; color: var(--muted); }
 .themes button { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; box-shadow: var(--sh-sm); transition: transform .2s var(--ease); }
 .themes button:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -117,6 +118,7 @@ body.pinned .strip { padding: 8px max(28px, calc((100% - 1080px) / 2 + 28px)); f
 
 @media (max-width: 640px) {
   .bar-in { grid-template-columns: 1fr auto; padding: 12px 16px; }
+  #tools { grid-column: 2; }
   form { grid-column: 1 / -1; grid-row: 2; }
   #t { max-width: 96px; padding-left: 10px; padding-right: 6px; }
   button.primary span { display: none; }
@@ -182,13 +184,13 @@ ul.matches li { padding: 14px 0; border-top: 1px solid var(--line); }
 ul.matches li:first-child { border-top: 0; }
 
 /* Result sections fold away: the verdict stays, the detail collapses. */
-details.sec { padding: 0; overflow: hidden; border-top: 1px solid var(--line); margin-top: 8px; }
-details.sec > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 20px 0; user-select: none; }
+details.sec { padding: 0; overflow: hidden; border-top: 2px solid color-mix(in srgb, var(--ink) 22%, var(--line)); margin-top: 32px; }
+details.sec > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 24px 0; user-select: none; }
 details.sec > summary::-webkit-details-marker { display: none; }
 details.sec > summary .sic { width: 1.25em; height: 1.25em; flex: none; display: inline-grid; place-items: center; color: var(--muted); background: none; border-radius: 0; box-shadow: none; transition: transform .3s var(--ease); }
 details.sec > summary:hover .sic { transform: rotate(-4deg); }
 details.sec > summary:active .sic { transform: rotate(-4deg) scale(.96); }
-details.sec > summary h3 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+details.sec > summary h3 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
 details.sec > summary .meta { color: var(--muted); font-size: 14px; margin-left: auto; text-align: right; }
 details.sec > summary::after { content: ""; flex: none; width: 9px; height: 9px; border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .3s var(--ease); margin: 0 4px 4px 4px; }
 details.sec[open] > summary::after { transform: rotate(225deg); margin-bottom: 0; margin-top: 6px; }
