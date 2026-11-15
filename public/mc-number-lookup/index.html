@@ -13,7 +13,7 @@
 <header class="bar"><div class="bar-in">
   <button class="brand" id="brand" type="button" title="Start over"><span class="mark"><svg class="node-svg" viewBox="0 0 48 48" aria-hidden="true"><g class="node-line"><path d="M24 24 38 11M24 24 11 36M24 24 38 37"/></g><circle class="node-dot" cx="38" cy="11" r="4.5"/><circle class="node-dot" cx="11" cy="36" r="4.5"/><circle class="node-dot" cx="38" cy="37" r="4.5"/><circle class="node-center" cx="24" cy="24" r="12"/><path class="node-check" d="M18.5 24.5 22.5 28.5 30 20"/></svg></span>Dotty</button>
   <form id="f">
-    <input id="q" type="search" placeholder="MC number, e.g. MC1515" autocomplete="off" aria-label="Carrier search" autofocus>
+    <input id="q" type="search" placeholder="MC number, e.g. MC1515" autocomplete="off" aria-label="Carrier search">
     <select id="t" aria-label="Search type">
       <option value="auto">Auto</option>
       <option value="dot">DOT</option>
@@ -24,7 +24,7 @@
       <option value="address">Address</option>
       <option value="ca">CA number</option>
     </select>
-    <button class="primary" id="go" type="submit"><svg class="i"><use href="#i-search"/></svg><span>Search</span></button>
+    <button class="primary" id="go" type="submit" aria-label="Search"><svg class="i"><use href="#i-search"/></svg><span>Search</span></button>
   </form>
   <div id="tools"></div>
 </div>
@@ -34,12 +34,11 @@
   <svg class="node-svg hero-node" viewBox="0 0 48 48" aria-hidden="true"><g class="node-line"><path d="M24 24 38 11M24 24 11 36M24 24 38 37"/></g><circle class="node-dot" cx="38" cy="11" r="4.5"/><circle class="node-dot" cx="11" cy="36" r="4.5"/><circle class="node-dot" cx="38" cy="37" r="4.5"/><circle class="node-center" cx="24" cy="24" r="12"/><path class="node-check" d="M18.5 24.5 22.5 28.5 30 20"/></svg>
   <h1>MC number lookup</h1>
   <p class="sub">Enter an MC, MX or FF docket number to find the carrier and check its operating authority.</p>
-  <div class="trust"><span><svg class="node-svg sm" viewBox="0 0 48 48" aria-hidden="true"><g class="node-line"><path d="M24 24 38 11M24 24 11 36M24 24 38 37"/></g><circle class="node-dot" cx="38" cy="11" r="4.5"/><circle class="node-dot" cx="11" cy="36" r="4.5"/><circle class="node-dot" cx="38" cy="37" r="4.5"/><circle class="node-center" cx="24" cy="24" r="12"/><path class="node-check" d="M18.5 24.5 22.5 28.5 30 20"/></svg>FMCSA census</span></div>
   <p class="trust-note">California carriers also get CHP inspection results and DMV permit checks when available.</p>
 </div></section>
 <main>
   <div id="out" aria-live="polite"></div>
-<section class="card" style="margin-top:32px"><h2>What an MC number is</h2><p>An MC (motor carrier) number is the docket for-hire carriers hold for operating authority. This lookup finds the DOT record behind the docket and shows whether that authority is active or inactive.</p><h2>Before you approve a carrier</h2><p>Check that authority is active, the registration was updated recently, and the phone, address and email are not shared with unrelated or inactive carriers. Verify insurance and identity independently as well.</p><h2>Where the data comes from</h2><p>The FMCSA Company Census File, refreshed daily from a database about 24 hours old.</p></section>
+<section style="margin-top:32px"><h2>What an MC number is</h2><p>An MC (motor carrier) number is the docket for-hire carriers hold for operating authority. This lookup finds the DOT record behind the docket and shows whether that authority is active or inactive.</p><h2>Before you approve a carrier</h2><p>Check that authority is active, the registration was updated recently, and the phone, address and email are not shared with unrelated or inactive carriers. Verify insurance and identity independently as well.</p><h2>Where the data comes from</h2><p>The FMCSA Company Census File, refreshed daily from a database about 24 hours old.</p></section>
   <p class="fine"><a href="/">Dotty</a> · <a href="/dot-lookup/">DOT lookup</a> · <a href="/mc-number-lookup/">MC number lookup</a></p>
 </main>
 <footer class="site-foot">
