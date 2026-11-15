@@ -96,8 +96,8 @@ function displayLevel(d) {
 }
 
 function carrierLine(e) {
-  const bits = [e.name, `DOT ${e.dot}`, e.mc, e.location, STATUS_WORD[e.status] || e.status].filter(Boolean);
-  return bits.join(' · ');
+  const bits = [e.name, e.dot ? h('span', { class: 'num' }, 'DOT ' + e.dot) : null, e.mc ? h('span', { class: 'num' }, e.mc) : null, e.location, STATUS_WORD[e.status] || e.status].filter(Boolean);
+  return bits.flatMap((b, i) => (i ? [' \u00b7 ', b] : [b]));
 }
 
 function evidence(list) {
