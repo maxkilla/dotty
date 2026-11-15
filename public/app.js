@@ -28,15 +28,14 @@ function ic(name) {
   return s;
 }
 const SEC_ICON = { 'Signals': 'alert', 'Authority and insurance history': 'doc', 'Who owns this company?': 'users', 'California Motor Carrier Permit': 'road', 'Census record': 'truck', 'DotLookup risk check': 'gauge' };
-const SEV_ICON = { high: 'alert', medium: 'alert', low: 'info', info: 'info' };
 const LEVEL_ICON = { high: 'alert', medium: 'alert', low: 'info', clear: 'info' };
 
-// Fade cards in as they scroll into view.
+// Fade sections in as they scroll into view.
 const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.08 }) : null;
 function armReveal() {
   if (!io) return;
   document.documentElement.classList.add('rv');
-  document.querySelectorAll('#out .card, #out .verdict .level').forEach((el) => { el.classList.add('reveal'); io.observe(el); });
+  document.querySelectorAll('#out .sec, #out .verdict').forEach((el) => { el.classList.add('reveal'); io.observe(el); });
 }
 
 function h(tag, attrs, ...kids) {
@@ -115,17 +114,16 @@ function evidence(list) {
 }
 
 function signal(s) {
+  const sevWord = s.severity.charAt(0).toUpperCase() + s.severity.slice(1);
   return h('div', { class: 'sig' },
-    h('span', { class: 'dot ' + s.severity }, ic(SEV_ICON[s.severity] || 'info')),
-    h('div', {},
-      h('h3', {}, h('span', { class: 'sev ' + s.severity }, s.severity), s.title),
-      s.detail ? h('p', {}, s.detail) : null,
-      s.evidence ? evidence(s.evidence) : null));
+    h('h3', {}, h('span', { class: 'sev ' + s.severity }, sevWord), s.title),
+    s.detail ? h('p', {}, s.detail) : null,
+    s.evidence ? evidence(s.evidence) : null);
 }
 
 // Collapsible result section: the title and a one-line meta stay visible, the detail folds away.
 function section(title, meta, open, ...kids) {
-  const d = h('details', { class: 'card sec' }, h('summary', {}, h('span', { class: 'sic' }, ic(SEC_ICON[title] || 'layers')), h('h3', {}, title), meta ? h('span', { class: 'meta' }, meta) : null), h('div', { class: 'body' }, kids));
+  const d = h('details', { class: 'sec' }, h('summary', {}, h('span', { class: 'sic' }, ic(SEC_ICON[title] || 'layers')), h('h3', {}, title), meta ? h('span', { class: 'meta' }, meta) : null), h('div', { class: 'body' }, kids));
   if (open) d.open = true;
   return d;
 }
@@ -180,7 +178,7 @@ function renderOwnership(c) {
   if (st && SOS[st]) links.push([`${st} Secretary of State business search`, SOS[st]]);
   else if (st) links.push([`${st} Secretary of State business search`, 'https://duckduckgo.com/?q=' + encodeURIComponent(`${st} secretary of state business entity search`)]);
   links.push(['OpenCorporates' + (st ? ` (${st})` : ''), `https://opencorporates.com/companies?q=${q}` + (st ? `&jurisdiction_code=us_${st.toLowerCase()}` : '')]);
-  // FMCSA lists no owners, so this is a one-line pointer, not a whole section card.
+  // FMCSA lists no owners, so this is a one-line pointer, not a whole section.
   const joined = [];
   links.forEach(([t, u], i) => {
     if (i) joined.push(' or ');
@@ -253,7 +251,7 @@ function sparkline(trend) {
   const pts = trend.map((t, i) => [P + (i * (W - 2 * P)) / (trend.length - 1), H - P - ((t.score - lo) / span) * (H - 2 * P)]);
   const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, class: 'spark', role: 'img', 'aria-label': `Risk score over time: ${sc.join(', ')}` });
   svg.append(svgEl('polyline', { points: pts.map((p) => p.join(',')).join(' '), fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
-  pts.forEach((p, i) => svg.append(svgEl('circle', { cx: p[0], cy: p[1], r: i === pts.length - 1 ? 4.5 : 3, fill: i === pts.length - 1 ? 'currentColor' : 'var(--card)', stroke: 'currentColor', 'stroke-width': 2 })));
+  pts.forEach((p, i) => svg.append(svgEl('circle', { cx: p[0], cy: p[1], r: i === pts.length - 1 ? 4.5 : 3, fill: i === pts.length - 1 ? 'currentColor' : 'var(--bg)', stroke: 'currentColor', 'stroke-width': 2 })));
   return svg;
 }
 function pctLine(x, label) {
@@ -301,7 +299,7 @@ function renderCarrier(d) {
   fillStrip(c, disp.level, title);
   return [
     h('div', { class: 'verdict', id: 'verdict' },
-    h('div', { class: 'card head' },
+    h('div', { class: 'head' },
       h('h2', {}, c.legalName),
       c.dbaName ? h('div', { class: 'dba' }, 'DBA ' + c.dbaName) : null,
       h('div', { class: 'ids' },
@@ -340,9 +338,9 @@ function renderCarrier(d) {
 }
 
 function renderList(d) {
-  if (!d.matches.length && !d.dmv) return h('div', { class: 'card' }, `No carriers matched "${d.query}".`);
+  if (!d.matches.length && !d.dmv) return h('div', { class: 'list' }, `No carriers matched "${d.query}".`);
   const dmv = d.dmv && h('p', { style: 'margin:0 0 8px' }, h('b', {}, 'CA ' + d.dmv.ca), ' \xB7 ', d.dmv.name, d.dmv.dba ? ' \xB7 DBA ' + d.dmv.dba : '', d.dmv.phone ? ' \xB7 ' + d.dmv.phone : '');
-  return h('div', { class: 'card' },
+  return h('div', { class: 'list' },
     dmv,
     h('p', { class: 'fine', style: d.dmv ? 'margin-top:0' : '' }, d.reverse === 'ca'
       ? (d.matches.length ? 'California permit found. These FMCSA records share its name or phone, pick one:' : 'California permit found, but no FMCSA record shares its name or phone.')
@@ -354,7 +352,7 @@ function renderList(d) {
 }
 
 function errCard(msg, retry, q, type) {
-  return h('div', { class: 'card err' }, msg, retry ? [' ', h('button', { class: 'link', type: 'button', onclick: () => run(q, type) }, 'Retry'), ' \u00b7 ', h('button', { class: 'link', type: 'button', onclick: () => run('80806', 'dot') }, 'Try DOT 80806')] : null);
+  return h('div', { class: 'err' }, msg, retry ? [' ', h('button', { class: 'link', type: 'button', onclick: () => run(q, type) }, 'Retry'), ' \u00b7 ', h('button', { class: 'link', type: 'button', onclick: () => run('80806', 'dot') }, 'Try DOT 80806')] : null);
 }
 
 // Stepped loading state: the lookup takes seconds (census + live FMCSA + cross-checks),
@@ -364,7 +362,7 @@ function stopSearching() { if (searchTimer) { clearInterval(searchTimer); search
 function searchingEl() {
   const steps = ['Checking the FMCSA census', 'Running the live FMCSA authority check', 'Cross-checking shared phones, addresses and owners'];
   const lis = steps.map((s, i) => h('li', { class: i === 0 ? 'active' : '' }, s));
-  const el = h('div', { class: 'card searching' },
+  const el = h('div', { class: 'searching' },
     h('div', { class: 'skel-bar' }),
     h('ol', { class: 'steps' }, lis),
     h('div', { class: 'skel-line' }), h('div', { class: 'skel-line short' }));
