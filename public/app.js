@@ -90,7 +90,7 @@ function displayLevel(d) {
   const large = (d.carrier.powerUnits || 0) >= 100 || (d.carrier.drivers || 0) >= 100;
   const allShared = d.signals.length > 0 && d.signals.every((s) => SHARED_IDS.has(s.id));
   if (highs.length === 1 && SHARED_IDS.has(highs[0].id) && allShared && large) {
-    return { level: 'clear', title: 'Proceed — 1 note', blurb: 'The only high-severity signal is a shared contact detail, common for related companies. Review the shared-contact signals below before approving.' };
+    return { level: 'clear', title: 'Proceed — 1 note', blurb: 'The only flag is a shared contact detail, common for related companies — shown in amber rather than red. Review the shared-contact signals below before approving.' };
   }
   return base;
 }
@@ -113,10 +113,13 @@ function evidence(list) {
   return h('div', {}, h('ul', { class: 'ev' }, list.slice(0, MAX).map(item)), rest, h('p', { class: 'fine' }, btn));
 }
 
-function signal(s) {
-  const sevWord = s.severity.charAt(0).toUpperCase() + s.severity.slice(1);
+function signal(s, softHigh) {
+  // softHigh: the verdict was re-weighted to Proceed, so a high
+  // shared-contact signal is displayed one step down, as Medium.
+  const sev = softHigh && s.severity === 'high' && SHARED_IDS.has(s.id) ? 'medium' : s.severity;
+  const sevWord = sev.charAt(0).toUpperCase() + sev.slice(1);
   return h('div', { class: 'sig' },
-    h('h3', {}, h('span', { class: 'sev ' + s.severity }, sevWord), s.title),
+    h('h3', {}, h('span', { class: 'sev ' + sev }, sevWord), s.title),
     s.detail ? h('p', {}, s.detail) : null,
     s.evidence ? evidence(s.evidence) : null);
 }
@@ -309,7 +312,7 @@ function renderCarrier(d) {
     h('div', { class: 'level ' + disp.level }, h('span', { class: 'lic' }, ic(LEVEL_ICON[disp.level])), h('b', {}, title), h('span', { class: 't' }, blurb))),
     h('div', { class: 'tools-row' }, h('button', { class: 'link', type: 'button', onclick: toggleAll }, ic('layers'), 'Expand or collapse all')),
     section('Signals', d.signals.length ? d.signals.length + (d.signals.length === 1 ? ' signal' : ' signals') : 'none', true,
-      d.signals.length ? d.signals.map(signal) : h('p', { class: 'fine' }, 'No signals to report.')),
+      d.signals.length ? d.signals.map((s) => signal(s, disp.level === 'clear')) : h('p', { class: 'fine' }, 'No signals to report.')),
     renderDl(d.dotlookup),
     renderHistory(d.history),
     renderOwnership(c),
