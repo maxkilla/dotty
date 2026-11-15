@@ -75,7 +75,7 @@ input[type=search] { flex: 1 1 auto; min-width: 0; }
 .node-svg.sm { width: 1.1em; height: 1.1em; vertical-align: -.18em; }
 .hero-node { width: 64px; height: 64px; display: block; margin: 0 0 12px; }
 body.has-out .hero .hero-node { display: none; }
-#tools { grid-column: 3; justify-self: end; min-width: 0; }
+.site-foot #tools { margin-top: 24px; }
 .themes { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
 .themes span { display: inline; font-size: 12px; font-weight: 600; color: var(--muted); }
 .themes button { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; box-shadow: var(--sh-sm); transition: transform .2s var(--ease); }
@@ -119,9 +119,8 @@ body.pinned .strip { padding: 8px max(28px, calc((100% - 1080px) / 2 + 28px)); f
 
 @media (max-width: 640px) {
   .bar-in { grid-template-columns: 1fr auto; padding: 12px 16px; }
-  #tools { grid-column: 2; }
   form { grid-column: 1 / -1; grid-row: 2; }
-  #t { max-width: 96px; padding-left: 10px; padding-right: 6px; }
+  #t { max-width: 76px; padding-left: 10px; padding-right: 6px; }
   button.primary span { display: none; }
   button.primary { padding: 11px 16px; }
   .strip { padding: 10px 16px; }
@@ -136,7 +135,7 @@ body.pinned .strip { padding: 8px max(28px, calc((100% - 1080px) / 2 + 28px)); f
 .head .dba { color: var(--muted); margin-top: 2px; }
 .ids { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
 .chip { display: inline; padding: 0; font-size: 15px; font-weight: 600; background: none; color: var(--muted); }
-.chip.num { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.num { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .chip.A { color: var(--ok); }
 .chip.I { color: var(--high); }
 
