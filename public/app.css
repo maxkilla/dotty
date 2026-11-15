@@ -76,6 +76,9 @@ input[type=search] { flex: 1 1 auto; min-width: 0; }
 .hero-node { width: 64px; height: 64px; display: block; margin: 0 0 12px; }
 body.has-out .hero .hero-node { display: none; }
 .site-foot #tools { margin-top: 24px; }
+.foot-try { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.foot-try p { flex: 1 1 auto; min-width: 0; margin: 0; }
+.foot-try #tools { margin-top: 0; flex: none; }
 .site-foot .themes span { font-size: 14px; }
 .site-foot .themes button { width: 16px; height: 16px; }
 .themes { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
